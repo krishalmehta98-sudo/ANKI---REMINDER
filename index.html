@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anki Reminder</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0F0F0F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Anki">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+:root{
+  --accent:#4FC3DC; --bg:#0F0F0F; --card:#1A1A1A; --card2:#222; --line:#2A2A2A;
+  --text:#F2F2F2; --muted:#8A8A8A;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  background:var(--bg);color:var(--text);display:flex;justify-content:center;min-height:100vh}
+#app{width:100%;max-width:680px;display:flex;flex-direction:column;min-height:100vh}
+header{padding:22px 22px 14px;border-bottom:1px solid var(--line)}
+h1{font-size:25px;font-weight:700;letter-spacing:-.5px}
+.sub{color:var(--muted);font-size:13px;margin-top:5px;line-height:1.5}
+main{flex:1;padding:18px 22px 120px}
+.screen{display:none}.screen.active{display:block}
+
+/* generic */
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{background:var(--card2);border:1px solid var(--line);color:var(--text);border-radius:8px;
+  padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:#0A0A0A;border-color:var(--accent)}
+.btn.danger{color:#E06A6A}
+.btn.sm{padding:5px 9px;font-size:12px}
+.wide{width:100%;padding:13px;font-size:15px;border-radius:11px;margin-bottom:14px}
+.link{background:none;border:none;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;padding:0}
+.empty{color:var(--muted);font-size:14px;text-align:center;padding:34px 14px;line-height:1.6}
+.sect{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:1.2px;margin:22px 0 10px}
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
+.chip{background:var(--card);border:1px solid var(--line);color:var(--muted);border-radius:20px;
+  padding:7px 13px;font-size:12px;font-weight:700;cursor:pointer}
+.chip.on{background:var(--accent);color:#0A0A0A;border-color:var(--accent)}
+.tabs{display:flex;gap:20px;border-bottom:1px solid var(--line);margin:12px 0 16px}
+.tab{background:none;border:none;color:var(--muted);font-size:12.5px;font-weight:700;letter-spacing:.7px;
+  padding:10px 0;cursor:pointer;border-bottom:2px solid transparent;font-family:inherit}
+.tab.on{color:var(--accent);border-bottom-color:var(--accent)}
+.datebar{background:var(--card);border-radius:12px;padding:13px;text-align:center;font-weight:700;font-size:14px}
+
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:16px}
+.stat{background:var(--card);border-radius:12px;padding:15px 8px;text-align:center}
+.stat b{display:block;font-size:24px;color:var(--accent)}
+.stat span{font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.6px}
+
+/* calendar */
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.cal-head b{font-size:16px}
+.navbtn{background:var(--card);border:1px solid var(--line);color:var(--text);width:34px;height:34px;
+  border-radius:9px;cursor:pointer;font-size:15px}
+.navbtn:hover{border-color:var(--accent)}
+.dow{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:5px}
+.dow span{text-align:center;font-size:10.5px;color:var(--muted);font-weight:700;letter-spacing:.4px;padding:4px 0}
+.dow span.we{color:var(--accent)}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.day{aspect-ratio:1;background:var(--card);border:1px solid transparent;border-radius:10px;display:flex;
+  flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;
+  font-size:14.5px;font-weight:700;user-select:none;transition:.12s}
+.day.we{background:color-mix(in srgb,var(--accent) 8%,var(--card))}
+.day:hover{border-color:var(--accent)}
+.day.out{opacity:.25;font-weight:500;cursor:default}
+.day.out:hover{border-color:transparent}
+.day .cnt{font-size:10px;font-weight:700;color:var(--accent)}
+.day.today{outline:1px solid var(--accent)}
+.day.sel{background:var(--accent);color:#0A0A0A}
+.day.sel .cnt{color:#0A0A0A}
+.hint{text-align:center;color:var(--muted);font-size:11.5px;margin:12px 0 16px}
+
+/* cards */
+.task{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:15px;margin-bottom:11px}
+.task.hi{border-color:var(--accent)}
+.trow{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;cursor:pointer}
+.ttitle{font-size:15.5px;font-weight:700;line-height:1.35}
+.ttitle.done{text-decoration:line-through;opacity:.55}
+.ttime{color:var(--muted);font-size:12.5px;margin-top:4px}
+.caret{color:var(--muted);font-size:11px;transition:.15s}
+.task.open .caret{transform:rotate(180deg)}
+.tbody{display:none;margin-top:13px;padding-top:13px;border-top:1px solid var(--line)}
+.task.open .tbody{display:block}
+.acts{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+.pill{font-size:10px;font-weight:700;letter-spacing:.5px;padding:3px 8px;border-radius:20px;
+  background:var(--card2);color:var(--muted);display:inline-block}
+.pill.p-high{color:#E06A6A}.pill.p-med{color:#E0B45A}.pill.acc{color:var(--accent)}
+.comment{background:var(--card2);border-radius:9px;padding:9px 11px;font-size:13px;margin-bottom:7px;line-height:1.5}
+.comment small{display:block;color:var(--muted);font-size:11px;margin-top:4px}
+
+/* rich text */
+.rt{background:var(--card2);border:1px solid var(--line);border-radius:9px;padding:11px;
+  min-height:90px;font-size:14px;line-height:1.6;outline:none}
+.rt:focus{border-color:var(--accent)}
+.rt img{max-width:100%;border-radius:8px;margin:6px 0}
+.rt ul,.rt ol{margin-left:20px}
+.rt h1{font-size:19px;margin:6px 0}.rt h2{font-size:16px;margin:6px 0}
+.rt-view{font-size:14px;line-height:1.6}
+.rt-view img{max-width:100%;border-radius:8px;margin:6px 0}
+.rt-view ul,.rt-view ol{margin-left:20px}
+.toolbar{display:flex;flex-wrap:wrap;gap:4px;background:var(--card2);border:1px solid var(--line);
+  border-bottom:none;border-radius:9px 9px 0 0;padding:6px}
+.toolbar+.rt{border-radius:0 0 9px 9px}
+.tb{background:none;border:none;color:var(--text);width:30px;height:28px;border-radius:6px;
+  cursor:pointer;font-size:13px;font-family:inherit}
+.tb:hover{background:var(--card)}
+.tb.w{width:auto;padding:0 8px;font-size:12px;font-weight:700}
+
+/* forms */
+.field{margin-bottom:11px}
+.field label{display:block;font-size:11px;color:var(--muted);font-weight:700;margin-bottom:5px;letter-spacing:.4px}
+input,select,textarea{width:100%;background:var(--card2);border:1px solid var(--line);color:var(--text);
+  border-radius:9px;padding:11px 12px;font-size:14px;font-family:inherit}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+textarea{resize:vertical;min-height:70px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+
+/* notes */
+.ncard{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--accent);
+  border-radius:11px;padding:14px;margin-bottom:11px;cursor:pointer}
+.ncard h4{font-size:15px;margin-bottom:5px}
+.snip{color:var(--muted);font-size:13px;line-height:1.5;max-height:42px;overflow:hidden}
+.tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:9px}
+.tag{background:var(--card2);color:var(--accent);font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:20px}
+.media{width:100%;border-radius:10px;margin-bottom:10px;display:block}
+
+/* settings */
+.opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:9px}
+.opt{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:12px;cursor:pointer;
+  display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:600}
+.opt.on{border-color:var(--accent)}
+.dot{width:14px;height:14px;border-radius:50%;flex-shrink:0}
+
+/* anki bubble */
+.anki{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:15px;margin-bottom:16px}
+.anki-head{display:flex;align-items:center;gap:9px;margin-bottom:11px}
+.av{width:30px;height:30px;border-radius:50%;background:var(--accent);color:#0A0A0A;display:flex;
+  align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0}
+.anki-head b{font-size:15px}.anki-head span{color:var(--muted);font-size:11.5px}
+.log{max-height:230px;overflow-y:auto;margin-bottom:11px;display:flex;flex-direction:column;gap:7px}
+.bub{max-width:85%;padding:9px 12px;border-radius:14px;font-size:13.5px;line-height:1.5}
+.bub.a{background:var(--card2);align-self:flex-start;border-bottom-left-radius:5px}
+.bub.u{background:var(--accent);color:#0A0A0A;align-self:flex-end;border-bottom-right-radius:5px;font-weight:600}
+.prop{background:var(--card2);border:1px dashed var(--accent);border-radius:12px;padding:13px;margin-top:11px}
+.prop .it{font-size:13.5px;line-height:1.5;padding:6px 0;border-bottom:1px solid var(--line)}
+.prop .it:last-of-type{border:none}
+
+/* alarm */
+#alarm{position:fixed;bottom:calc(78px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:calc(100% - 24px);max-width:656px;
+  background:var(--card);border:1px solid var(--accent);border-radius:14px;padding:14px;z-index:55;
+  box-shadow:0 8px 30px rgba(0,0,0,.5);display:none}
+#alarm.on{display:block;animation:pop .25s}
+@keyframes pop{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+.toggle{display:flex;justify-content:space-between;align-items:center;background:var(--card);
+  border:1px solid var(--line);border-radius:11px;padding:13px;margin-bottom:9px;font-size:13.5px;font-weight:600}
+.sw{width:44px;height:25px;border-radius:20px;background:var(--card2);border:1px solid var(--line);
+  position:relative;cursor:pointer;flex-shrink:0}
+.sw.on{background:var(--accent);border-color:var(--accent)}
+.sw i{position:absolute;top:2px;left:2px;width:19px;height:19px;border-radius:50%;background:var(--muted);transition:.15s}
+.sw.on i{left:21px;background:#0A0A0A}
+
+/* nav */
+nav{position:fixed;bottom:0;padding-bottom:calc(13px + env(safe-area-inset-bottom));width:100%;max-width:680px;background:var(--card);border-top:1px solid var(--line);
+  display:flex;padding:9px 2px 13px}
+nav button{flex:1;background:none;border:none;color:var(--muted);font-size:9.5px;font-weight:700;
+  cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;font-family:inherit}
+nav button i{font-style:normal;font-size:17px}
+nav button.on{color:var(--accent)}
+
+/* modal + toast */
+.mask{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;align-items:center;
+  justify-content:center;padding:18px}
+.mask.on{display:flex}
+.modal{background:var(--card);border-radius:16px;padding:20px;width:100%;max-width:420px;max-height:80vh;overflow:auto}
+.modal h3{font-size:16px;margin-bottom:14px}
+#toast{position:fixed;bottom:92px;left:50%;transform:translateX(-50%);background:var(--accent);color:#0A0A0A;
+  padding:10px 18px;border-radius:22px;font-size:13px;font-weight:700;opacity:0;transition:.25s;pointer-events:none;z-index:60}
+#toast.on{opacity:1}
+.busy{color:var(--muted);font-size:13px;padding:8px 0}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Anki Reminder</h1>
+    <div class="sub" id="hdrSub"></div>
+  </header>
+  <main>
+    <section id="s-home" class="screen"></section>
+    <section id="s-calendar" class="screen"></section>
+    <section id="s-review" class="screen"></section>
+    <section id="s-voice" class="screen"></section>
+    <section id="s-scan" class="screen"></section>
+    <section id="s-notes" class="screen"></section>
+    <section id="s-settings" class="screen"></section>
+  </main>
+  <nav id="nav"></nav>
+</div>
+<div class="mask" id="mask"><div class="modal" id="modal"></div></div>
+<div id="alarm"></div>
+<div id="toast"></div>
+<input type="file" id="hiddenFile" accept="image/*" style="display:none">
+
+<script>
+/* ============ storage ============ */
+const KEY='anki-reminder-v2';
+function load(){ try{ const r=localStorage.getItem(KEY); if(r) return JSON.parse(r); }catch(e){} return null; }
+function persist(){
+  try{ localStorage.setItem(KEY,JSON.stringify(D)); }catch(e){ toast('Storage full — remove some images'); }
+  if(typeof fbPush==='function') fbPush();
+}
+
+const TODAY=new Date(2026,6,29);
+const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const T_ISO=iso(TODAY);
+
+const SEED={
+  seq:200, theme:'teal', mood:'energized', aiKey:'',
+  chat:[], reminders:false, alarmSound:true, snoozeMin:10, me:'', group:null, fbCfg:'', members:[], role:'owner',
+  tasks:[
+    {id:1,date:T_ISO,title:'Take medication',time:'09:00',status:'open',priority:'high',html:'<p>Kitchen counter, with breakfast.</p>',comments:[],noteIds:[]},
+    {id:2,date:T_ISO,title:'Drink water',time:'10:30',status:'open',priority:'low',html:'',comments:[],noteIds:[]},
+    {id:3,date:T_ISO,title:'Morning walk',time:'07:30',status:'progress',priority:'med',html:'<p>20 minutes around the block.</p>',comments:[{id:11,text:'Did 12 min, knee sore',at:Date.now()}],noteIds:[]},
+    {id:4,date:T_ISO,title:'Log breakfast',time:'08:15',status:'done',priority:'low',html:'',comments:[],noteIds:[]},
+    {id:5,date:'2026-07-30',title:'Doctor appointment',time:'11:00',status:'open',priority:'high',html:'<p>Bring last reports.</p>',comments:[],noteIds:[]},
+    {id:6,date:'2026-07-30',title:'Refill prescription',time:'16:00',status:'progress',priority:'med',html:'',comments:[],noteIds:[]},
+    {id:7,date:'2026-07-31',title:'Blood test',time:'08:00',status:'open',priority:'high',html:'<p>Fasting from 10pm.</p>',comments:[],noteIds:[]},
+    {id:8,date:'2026-08-02',title:'Weekly review',time:'18:00',status:'open',priority:'med',html:'',comments:[],noteIds:[]},
+    {id:9,date:'2026-08-02',title:'Grocery run',time:'12:00',status:'open',priority:'low',html:'',comments:[],noteIds:[]}
+  ],
+  notes:[{id:20,title:'Questions for the doctor',html:'<ul><li>Dosage timing</li><li>Side effects</li></ul>',
+    tags:['health'],taskId:5,pinned:true,at:Date.now(),updated:Date.now()}],
+  voice:[], scans:[]
+};
+
+let D = load() || JSON.parse(JSON.stringify(SEED));
+D.chat=D.chat||[]; D.reminders=D.reminders||false; D.alarmSound=D.alarmSound!==false; D.snoozeMin=D.snoozeMin||10;
+D.defRem=D.defRem||[{off:0,type:'both'}];
+D.me=D.me||''; D.group=D.group||null; D.fbCfg=D.fbCfg||''; D.members=D.members||[]; D.role=D.role||'owner';
+D.tasks.forEach(t=>{ if(!t.reminders) t.reminders = t.alarm===false?[]:[{id:++D.seq,off:0,type:'both'}]; });
+const nid = () => ++D.seq;
+
+const THEMES={
+  teal:{accent:'#4FC3DC',bg:'#0F0F0F',card:'#1A1A1A',card2:'#222222',line:'#2A2A2A',text:'#F2F2F2',muted:'#8A8A8A',label:'Teal'},
+  sage:{accent:'#7DB89F',bg:'#0F0F0F',card:'#1A1A1A',card2:'#222222',line:'#2A2A2A',text:'#F2F2F2',muted:'#8A8A8A',label:'Sage Green'},
+  purple:{accent:'#9B8DC7',bg:'#0F0F0F',card:'#1A1A1A',card2:'#222222',line:'#2A2A2A',text:'#F2F2F2',muted:'#8A8A8A',label:'Muted Purple'},
+  coral:{accent:'#E07856',bg:'#F9F7F4',card:'#FFFFFF',card2:'#F1EEE9',line:'#E3DED6',text:'#22201E',muted:'#8A8378',label:'Coral'},
+  peach:{accent:'#D68A6F',bg:'#F9F7F4',card:'#FFFFFF',card2:'#F1EEE9',line:'#E3DED6',text:'#22201E',muted:'#8A8378',label:'Warm Peach'},
+  rose:{accent:'#C484A0',bg:'#F9F7F4',card:'#FFFFFF',card2:'#F1EEE9',line:'#E3DED6',text:'#22201E',muted:'#8A8378',label:'Muted Rose'}
+};
+const MOODS={energized:'🔋 Energized',neutral:'😐 Neutral',overwhelmed:'😰 Overwhelmed',moody:'😔 Moody'};
+const STATUS=[['open','OPEN'],['progress','IN PROGRESS'],['done','DONE']];
+
+let S={screen:'home',month:new Date(2026,6,1),date:T_ISO,homeFilter:'today',showDone:true,
+  calTab:'open',revTab:'open',openIds:new Set(),editTask:null,addingTask:false,
+  noteEdit:null,noteQuery:'',tagFilter:'',recording:false,busy:'',pending:null,alarm:null,formRem:null,remFor:null};
+
+/* ============ helpers ============ */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const strip=h=>{const d=document.createElement('div');d.innerHTML=h||'';return (d.textContent||'').trim()};
+const byDate=d=>D.tasks.filter(t=>t.date===d).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+const task=id=>D.tasks.find(t=>t.id===id);
+const note=id=>D.notes.find(n=>n.id===id);
+const fmtLong=d=>new Date(d+'T00:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+const fmtShort=d=>new Date(d+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+const fmtTime=t=>{if(!t)return'';const[h,m]=t.split(':').map(Number);const ap=h>=12?'PM':'AM';return `${h%12===0?12:h%12}:${String(m).padStart(2,'0')} ${ap}`};
+const stamp=at=>new Date(at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),1800)}
+function weekRange(){const d=new Date(T_ISO+'T00:00:00');const s=new Date(d);s.setDate(d.getDate()-d.getDay());
+  const e=new Date(s);e.setDate(s.getDate()+6);return[iso(s),iso(e)]}
+function monthRange(){const d=new Date(T_ISO+'T00:00:00');
+  return[iso(new Date(d.getFullYear(),d.getMonth(),1)),iso(new Date(d.getFullYear(),d.getMonth()+1,0))]}
+function inFilter(t){
+  if(S.homeFilter==='all')return true;
+  if(S.homeFilter==='today')return t.date===T_ISO;
+  const[a,b]=S.homeFilter==='week'?weekRange():monthRange();
+  return t.date>=a&&t.date<=b;
+}
+function pickImage(cb,capture){
+  const el=$('#hiddenFile');
+  el.value=''; capture?el.setAttribute('capture','environment'):el.removeAttribute('capture');
+  el.onchange=()=>{const f=el.files[0];if(!f)return;const r=new FileReader();
+    r.onload=()=>cb(r.result,f.name);r.readAsDataURL(f)};
+  el.click();
+}
+
+/* ============ render ============ */
+function render(save){
+  if(save!==false) persist();
+  const t=THEMES[D.theme]||THEMES.teal, r=document.documentElement.style;
+  ['accent','bg','card','card2','line','text','muted'].forEach(k=>r.setProperty('--'+k,t[k]));
+  $('#hdrSub').innerHTML=`${TODAY.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'})} · Mood: ${MOODS[D.mood].split(' ')[1]}`;
+  document.querySelectorAll('.screen').forEach(e=>e.classList.remove('active'));
+  $('#s-'+S.screen).classList.add('active');
+  $('#nav').innerHTML=[['home','📋','Home'],['calendar','📅','Calendar'],['review','🌅','Review'],
+    ['voice','🎤','Voice'],['scan','📸','Scan'],['notes','📝','Notes'],['settings','⚙️','Settings']]
+    .map(([k,i,l])=>`<button class="${S.screen===k?'on':''}" onclick="go('${k}')"><i>${i}</i>${l}</button>`).join('');
+  ({home:drawHome,calendar:drawCalendar,review:drawReview,voice:drawVoice,scan:drawScan,notes:drawNotes,settings:drawSettings})[S.screen]();
+  drawAlarm();
+}
+function go(s){S.screen=s;S.editTask=null;S.addingTask=false;S.noteEdit=null;render();window.scrollTo({top:0})}
+
+/* ---- HOME ---- */
+function drawHome(){
+  const list=D.tasks.filter(inFilter);
+  const live=list.filter(t=>t.status!=='done').sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+  const done=list.filter(t=>t.status==='done').sort((a,b)=>(b.date).localeCompare(a.date));
+  const c=s=>list.filter(t=>t.status===s).length;
+  const groups={};live.forEach(t=>(groups[t.date]=groups[t.date]||[]).push(t));
+  $('#s-home').innerHTML=`
+    ${ankiBubble()}
+    <div class="chips">${[['today','Today'],['week','This week'],['month','This month'],['all','Everything']]
+      .map(([k,l])=>`<button class="chip ${S.homeFilter===k?'on':''}" onclick="setFilter('${k}')">${l}</button>`).join('')}</div>
+    <div class="stats">
+      <div class="stat"><b>${c('open')}</b><span>OPEN</span></div>
+      <div class="stat"><b>${c('progress')}</b><span>IN PROGRESS</span></div>
+      <div class="stat"><b>${c('done')}</b><span>DONE</span></div>
+    </div>
+    <div class="datebar">📅 ${S.homeFilter==='today'?fmtLong(T_ISO):({week:'This week',month:'This month',all:'All tasks'})[S.homeFilter]}</div>
+    <div class="sect">TO DO</div>
+    ${Object.keys(groups).length?Object.keys(groups).sort().map(d=>`
+      ${S.homeFilter!=='today'?`<div class="sect" style="margin:14px 0 8px">${fmtShort(d).toUpperCase()}</div>`:''}
+      ${groups[d].map(t=>taskCard(t)).join('')}`).join('')
+      :'<div class="empty">Nothing pending here. Add tasks in Review.</div>'}
+    <div class="sect" style="display:flex;justify-content:space-between;align-items:center">
+      <span>COMPLETED · ${done.length}</span>
+      <button class="link" onclick="S.showDone=!S.showDone;render()">${S.showDone?'Hide':'Show'}</button>
+    </div>
+    ${S.showDone?(done.length?done.map(t=>taskCard(t)).join(''):'<div class="empty">Nothing completed yet.</div>'):''}`;
+}
+function setFilter(k){S.homeFilter=k;render()}
+
+/* ---- ANKI (assistant bubble) ---- */
+function ankiBubble(){
+  const log=D.chat.slice(-6);
+  return `<div class="anki">
+    <div class="anki-head"><span class="av">A</span><b>Anki</b><span>your assistant</span></div>
+    <div class="log">
+      ${log.length?log.map(m=>`<div class="bub ${m.role==='you'?'u':'a'}">${esc(m.text)}</div>`).join('')
+        :'<div class="bub a">Hi! Tell me what\'s happening — "meeting at 3 with Aditya" — and I\'ll set it up for you.</div>'}
+      ${S.busy?`<div class="bub a">${esc(S.busy)}</div>`:''}
+    </div>
+    ${S.pending?proposal():''}
+    <div class="row">
+      <input id="ankiIn" placeholder="Hi Anki…" style="flex:1;min-width:140px"
+        onkeydown="if(event.key==='Enter')ankiSend()">
+      <button class="btn primary" onclick="ankiSend()">Send</button>
+      ${D.chat.length?`<button class="btn" onclick="D.chat=[];S.pending=null;render()">Clear</button>`:''}
+    </div>
+  </div>`;
+}
+function proposal(){
+  const p=S.pending;
+  return `<div class="prop">
+    <div class="sect" style="margin:0 0 6px">ANKI SUGGESTS — APPROVE?</div>
+    ${p.tasks.map(t=>`<div class="it">✅ <b>${esc(t.title)}</b><br>
+      <span class="ttime">${fmtShort(t.date)} · ${fmtTime(t.time)} · ${t.priority}${t.notes?' · '+esc(t.notes):''}</span></div>`).join('')}
+    ${p.notes.map(n=>`<div class="it">📝 <b>${esc(n.title)}</b><br><span class="ttime">${esc((n.body||'').slice(0,90))}</span></div>`).join('')}
+    <div class="acts">
+      <button class="btn sm primary" onclick="approve(false)">Add it</button>
+      <button class="btn sm" onclick="approve(true)">Add &amp; edit</button>
+      <button class="btn sm danger" onclick="S.pending=null;render()">Discard</button>
+    </div>
+  </div>`;
+}
+const GREET=["Hey! What's on your plate?","Hi! Tell me what to set up.","Hello — what are we scheduling?"];
+async function ankiSend(){
+  const el=$('#ankiIn'); const text=(el.value||'').trim(); if(!text) return;
+  el.value='';
+  D.chat.push({role:'you',text,at:Date.now()});
+  if(/^(hi|hey|hello|yo|hola|namaste)\b[\s!,.]*(anki)?[\s!,.]*$/i.test(text)){
+    D.chat.push({role:'anki',text:GREET[Math.floor(Math.random()*GREET.length)],at:Date.now()});
+    return render();
+  }
+  S.busy='Anki is thinking…'; S.pending=null; render();
+  let plan;
+  try{ plan = D.aiKey ? await ankiPlan(text) : localPlan(text); }
+  catch(e){ plan = localPlan(text); plan.reply='(Offline read) '+plan.reply; }
+  S.busy='';
+  if(!plan.tasks.length && !plan.notes.length){
+    D.chat.push({role:'anki',text:plan.reply||"I didn't catch a task in that — try \"call mom at 6 tomorrow\".",at:Date.now()});
+    return render();
+  }
+  S.pending=plan;
+  D.chat.push({role:'anki',text:plan.reply,at:Date.now()});
+  render();
+}
+async function ankiPlan(text){
+  const out=await ai(`You are Anki, a warm and very brief assistant inside a task app.
+Today is ${T_ISO}. The user said: "${text}"
+Reply with ONLY a JSON object, no markdown, no commentary:
+{"reply":"one short friendly sentence confirming what you understood",
+ "tasks":[{"title":"","date":"YYYY-MM-DD","time":"HH:MM","priority":"low|med|high","notes":""}],
+ "notes":[{"title":"","body":"","tags":[]}]}
+Anything time-bound is a task. Anything to simply remember is a note. Use empty arrays when there are none.
+Assume today's date when none is given, and a sensible time when none is given.`);
+  const j=JSON.parse(out.slice(out.indexOf('{'),out.lastIndexOf('}')+1));
+  return {reply:j.reply||'Here you go.',tasks:(j.tasks||[]).map(t=>({
+    title:t.title||'Untitled',date:t.date||T_ISO,time:(t.time||'09:00').slice(0,5),
+    priority:['low','med','high'].includes(t.priority)?t.priority:'low',notes:t.notes||''})),
+    notes:j.notes||[]};
+}
+/* works with no API key at all */
+function localPlan(text){
+  const d=new Date(T_ISO+'T00:00:00'); let date=T_ISO;
+  const low=text.toLowerCase();
+  if(/\btomorrow\b/.test(low)){d.setDate(d.getDate()+1);date=iso(d)}
+  else if(/\bday after\b/.test(low)){d.setDate(d.getDate()+2);date=iso(d)}
+  else{
+    const days=['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+    const hit=days.findIndex(x=>low.includes(x));
+    if(hit>-1){const diff=(hit-d.getDay()+7)%7||7;d.setDate(d.getDate()+diff);date=iso(d)}
+  }
+  let time='09:00';
+  const m=low.match(/(?:at\s*)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
+  if(m){
+    let h=+m[1]; const mi=m[2]||'00';
+    if(m[3]==='pm'&&h<12)h+=12;
+    if(m[3]==='am'&&h===12)h=0;
+    if(!m[3]&&h<=7)h+=12;
+    if(h<24) time=`${String(h).padStart(2,'0')}:${mi}`;
+  }
+  const title=text.replace(/\b(at|on|by)\s*\d{1,2}(:\d{2})?\s*(am|pm)?/ig,'')
+    .replace(/\b(today|tomorrow|day after)\b/ig,'').replace(/\s{2,}/g,' ').trim();
+  return {reply:`Got it — "${title||text}" on ${fmtShort(date)} at ${fmtTime(time)}. Add it?`,
+    tasks:[{title:(title||text).slice(0,70),date,time,priority:'med',notes:''}],notes:[]};
+}
+function approve(edit){
+  const p=S.pending; let last=null;
+  p.tasks.forEach(t=>{
+    last={id:nid(),date:t.date,title:t.title,time:t.time,status:'open',priority:t.priority,
+      html:t.notes?`<p>${esc(t.notes)}</p>`:'',comments:[],noteIds:[],
+      reminders:JSON.parse(JSON.stringify(D.defRem)).map(r=>({...r,id:nid()}))};
+    D.tasks.push(last);
+  });
+  (p.notes||[]).forEach(n=>D.notes.unshift({id:nid(),title:n.title||'Note',html:`<p>${esc(n.body||'')}</p>`,
+    tags:n.tags||[],taskId:null,pinned:false,at:Date.now(),updated:Date.now()}));
+  D.chat.push({role:'anki',text:'Done — added.',at:Date.now()});
+  S.pending=null;
+  if(edit&&last){S.date=last.date;S.revTab='open';S.screen='review';S.editTask=last.id}
+  render(); toast('Added');
+}
+
+/* ---- REMINDERS / ALARM ---- */
+const OFFS=[[0,'At the time'],[5,'5 min before'],[10,'10 min before'],[15,'15 min before'],[30,'30 min before'],
+  [60,'1 hour before'],[120,'2 hours before'],[1440,'1 day before']];
+const RTYPES=[['both','🔔 Alarm + push'],['alarm','🔊 Alarm only'],['push','📱 Push only'],['silent','🔕 Silent banner']];
+const offLabel=o=>(OFFS.find(x=>x[0]===+o)||[0,o+' min before'])[1];
+const remDue=(t,r)=>r.snoozeAt||(Date.parse(t.date+'T'+(t.time||'09:00'))-r.off*60000);
+function checkReminders(){
+  if(!D.reminders||S.alarm) return;
+  const now=Date.now();
+  for(const t of D.tasks){
+    if(t.status==='done') continue;
+    for(const r of (t.reminders||[])){
+      const due=remDue(t,r);
+      if(due<=now&&now-due<12*3600e3&&r.firedFor!==due){
+        r.firedFor=due; S.alarm={t:t.id,r:r.id}; persist();
+        if((r.type==='both'||r.type==='push')&&window.Notification&&Notification.permission==='granted')
+          new Notification('⏰ '+t.title,{body:offLabel(r.off)+' · '+fmtTime(t.time)+', '+fmtShort(t.date),tag:'anki'+r.id});
+        if(r.type==='both'||r.type==='alarm') beep();
+        render(false); return;
+      }
+    }
+  }
+}
+function beep(){
+  if(!D.alarmSound) return;
+  try{
+    const C=window.AudioContext||window.webkitAudioContext; const ctx=new C();
+    [0,.45,.9].forEach(t=>{
+      const o=ctx.createOscillator(),g=ctx.createGain();
+      o.type='sine'; o.frequency.value=880; o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(.001,ctx.currentTime+t);
+      g.gain.exponentialRampToValueAtTime(.25,ctx.currentTime+t+.05);
+      g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+t+.3);
+      o.start(ctx.currentTime+t); o.stop(ctx.currentTime+t+.32);
+    });
+  }catch(e){}
+}
+function drawAlarm(){
+  const el=$('#alarm');
+  if(!S.alarm){ el.classList.remove('on'); el.innerHTML=''; return }
+  const t=task(S.alarm.t);
+  if(!t){ S.alarm=null; el.classList.remove('on'); return }
+  const r=(t.reminders||[]).find(x=>x.id===S.alarm.r);
+  el.innerHTML=`<div class="ttitle">⏰ ${esc(t.title)}</div>
+    <div class="ttime">${fmtTime(t.time)} · ${fmtShort(t.date)}${r?' · '+offLabel(r.off):''}</div>
+    <div class="acts">
+      <button class="btn sm primary" onclick="alarmDone()">Mark done</button>
+      <button class="btn sm" onclick="snooze(${D.snoozeMin})">Snooze ${D.snoozeMin}m</button>
+      <button class="btn sm" onclick="snooze(60)">Snooze 1h</button>
+      <button class="btn sm" onclick="S.alarm=null;openInReview('${t.date}')">Open</button>
+      <button class="btn sm danger" onclick="dismissAlarm()">Dismiss</button>
+    </div>`;
+  el.classList.add('on');
+}
+function snooze(min){
+  const t=task(S.alarm.t), r=t&&(t.reminders||[]).find(x=>x.id===S.alarm.r);
+  if(r){ r.snoozeAt=Date.now()+min*60000; r.firedFor=null }
+  S.alarm=null; render(); toast('Snoozed '+min+'m');
+}
+function dismissAlarm(){S.alarm=null;render()}
+function alarmDone(){const id=S.alarm.t;S.alarm=null;setStatus(id,'done')}
+function askNotify(){
+  if(!window.Notification){ D.reminders=!D.reminders; return render() }
+  if(!D.reminders){
+    Notification.requestPermission().then(()=>{D.reminders=true;render();toast('Reminders on')});
+  } else { D.reminders=false; render() }
+}
+setInterval(checkReminders,15000);
+
+/* ---- CALENDAR ---- */
+function drawCalendar(){
+  const m=S.month,y=m.getFullYear(),mo=m.getMonth();
+  const first=new Date(y,mo,1).getDay(),days=new Date(y,mo+1,0).getDate(),prev=new Date(y,mo,0).getDate();
+  let cells='';
+  for(let i=first-1;i>=0;i--)cells+=`<div class="day out">${prev-i}</div>`;
+  for(let d=1;d<=days;d++){
+    const key=`${y}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dow=new Date(y,mo,d).getDay(), n=byDate(key).length;
+    cells+=`<div class="${['day',(dow===0||dow===6)?'we':'',key===S.date?'sel':'',key===T_ISO?'today':''].join(' ')}"
+      onclick="pickDate('${key}')" ondblclick="openInReview('${key}')">${d}${n?`<span class="cnt">${n}</span>`:''}</div>`;
+  }
+  const rest=(7-((first+days)%7))%7;
+  for(let d=1;d<=rest;d++)cells+=`<div class="day out">${d}</div>`;
+  const list=byDate(S.date).filter(t=>t.status===S.calTab);
+  $('#s-calendar').innerHTML=`
+    <div class="cal-head">
+      <button class="navbtn" onclick="shiftMonth(-1)">‹</button>
+      <b>${m.toLocaleDateString('en-US',{month:'long',year:'numeric'})}</b>
+      <button class="navbtn" onclick="shiftMonth(1)">›</button>
+    </div>
+    <div class="dow">${['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+      .map((d,i)=>`<span class="${i===0||i===6?'we':''}">${d}</span>`).join('')}</div>
+    <div class="grid">${cells}</div>
+    <div class="hint">Tap a date to preview · double-tap to open it in Review</div>
+    <div class="datebar">📅 ${fmtLong(S.date)}</div>
+    ${tabsHTML('calTab',S.calTab,S.date)}
+    ${list.length?list.map(t=>taskCard(t)).join(''):'<div class="empty">No tasks here.</div>'}
+    <button class="btn wide" onclick="openInReview('${S.date}')">→ Open this date in Review</button>`;
+}
+function shiftMonth(n){S.month=new Date(S.month.getFullYear(),S.month.getMonth()+n,1);render()}
+function pickDate(d){S.date=d;render()}
+function openInReview(d){
+  S.date=d;S.screen='review';S.editTask=null;S.addingTask=false;
+  const t=byDate(d);
+  S.revTab=t.some(x=>x.status===S.revTab)?S.revTab:(t.length?t[0].status:'open');
+  render();
+}
+function tabsHTML(key,val,date){
+  const n=s=>byDate(date).filter(t=>t.status===s).length;
+  return `<div class="tabs">${STATUS.map(([k,l])=>
+    `<button class="tab ${val===k?'on':''}" onclick="setTab('${key}','${k}')">${l}${n(k)?` (${n(k)})`:''}</button>`).join('')}</div>`;
+}
+function setTab(k,v){S[k]=v;S.editTask=null;S.addingTask=false;render()}
+
+/* ---- REVIEW ---- */
+function drawReview(){
+  const list=byDate(S.date).filter(t=>t.status===S.revTab);
+  $('#s-review').innerHTML=`
+    <div class="datebar">📅 ${fmtLong(S.date)}</div>
+    <div class="row" style="margin:11px 0 2px">
+      <button class="btn" onclick="stepDay(-1)">‹ Prev</button>
+      <button class="btn" onclick="S.date=T_ISO;render()">Today</button>
+      <button class="btn" onclick="stepDay(1)">Next ›</button>
+      <button class="btn" onclick="go('calendar')">📅 Calendar</button>
+    </div>
+    ${tabsHTML('revTab',S.revTab,S.date)}
+    ${S.addingTask?taskForm(null):`<button class="btn primary wide" onclick="S.addingTask=true;S.editTask=null;S.formRem=null;render()">+ Add task${canEdit()?'':' (private to me)'}</button>`}
+    ${list.length?list.map(t=>S.editTask===t.id?taskForm(t):taskCard(t,true)).join('')
+      :'<div class="empty">Nothing in this list. Add a task above.</div>'}`;
+}
+function stepDay(n){const d=new Date(S.date+'T00:00:00');d.setDate(d.getDate()+n);
+  S.date=iso(d);S.month=new Date(d.getFullYear(),d.getMonth(),1);S.editTask=null;S.addingTask=false;render()}
+
+function taskCard(t,full){
+  const open=S.openIds.has(t.id);
+  const linked=(t.noteIds||[]).map(note).filter(Boolean);
+  return `<div class="task ${open?'open':''}">
+    <div class="trow" onclick="toggleTask(${t.id})">
+      <div style="flex:1">
+        <div class="ttitle ${t.status==='done'?'done':''}">${esc(t.title)}</div>
+        <div class="ttime">${fmtTime(t.time)}${t.date!==S.date||!full?` · ${fmtShort(t.date)}`:''}
+          ${t.priority&&t.priority!=='low'?`<span class="pill p-${t.priority}">${t.priority.toUpperCase()}</span>`:''}
+          <span class="pill ${t.status==='done'?'':'acc'}">${STATUS.find(s=>s[0]===t.status)[1]}</span>
+          ${t.comments.length?`<span class="pill">💬 ${t.comments.length}</span>`:''}
+          ${(t.reminders||[]).length?`<span class="pill">⏰ ${t.reminders.length}</span>`:''}
+          ${t.priv?`<span class="pill">🔒 Private</span>`:(D.group&&t.by?`<span class="pill acc">👤 ${esc(t.by)}</span>`:'')}
+          ${linked.length?`<span class="pill">📝 ${linked.length}</span>`:''}
+        </div>
+      </div>
+      <span class="caret">▼</span>
+    </div>
+    <div class="tbody">
+      ${t.html?`<div class="rt-view">${t.html}</div>`:'<div class="ttime">No notes on this task yet.</div>'}
+      ${linked.length?`<div class="sect">LINKED NOTES</div>${linked.map(n=>
+        `<div class="comment" onclick="openNote(${n.id})" style="cursor:pointer">📝 ${esc(n.title||'Untitled')}</div>`).join('')}`:''}
+      ${t.comments.length?`<div class="sect">COMMENTS</div>${t.comments.map(c=>
+        `<div class="comment">${esc(c.text)}<small>${stamp(c.at)} · <span class="link" onclick="delComment(${t.id},${c.id})">delete</span></small></div>`).join('')}`:''}
+      ${(canEdit()||t.priv)?`<div class="row" style="margin-top:10px">
+        <input id="cm${t.id}" placeholder="Leave a comment…" style="flex:1;min-width:150px">
+        <button class="btn" onclick="addComment(${t.id})">Post</button>
+      </div>`:''}
+      <div class="acts">
+        ${(canEdit()||t.priv)?`
+          ${STATUS.filter(s=>s[0]!==t.status).map(([k,l])=>
+            `<button class="btn sm" onclick="setStatus(${t.id},'${k}')">→ ${l}</button>`).join('')}
+          <button class="btn sm primary" onclick="editTask(${t.id})">Edit</button>
+          <button class="btn sm" onclick="remModal(${t.id})">⏰ Reminders</button>
+          <button class="btn sm" onclick="moveModal(${t.id})">Move date</button>
+          <button class="btn sm" onclick="linkNoteModal(${t.id})">Link note</button>
+          <button class="btn sm danger" onclick="delTask(${t.id})">Delete</button>`
+        :`<button class="btn sm" onclick="remModal(${t.id})">⏰ Remind me</button>
+          <span class="pill">👀 View only — ask the owner for edit access</span>`}
+      </div>
+    </div>
+  </div>`;
+}
+function toggleTask(id){S.openIds.has(id)?S.openIds.delete(id):S.openIds.add(id);render(false)}
+
+function taskForm(t){
+  const isNew=!t;
+  if(!S.formRem) S.formRem = t ? JSON.parse(JSON.stringify(t.reminders||[])) : JSON.parse(JSON.stringify(D.defRem)).map(r=>({...r,id:nid()}));
+  return `<div class="task hi">
+    <div class="field"><label>TASK</label><input id="fTitle" value="${t?esc(t.title):''}" placeholder="What needs doing?"></div>
+    <div class="two">
+      <div class="field"><label>TIME</label><input id="fTime" type="time" value="${t?t.time:'09:00'}"></div>
+      <div class="field"><label>DATE</label><input id="fDate" type="date" value="${t?t.date:S.date}"></div>
+    </div>
+    <div class="two">
+      <div class="field"><label>STATUS</label><select id="fStatus">${STATUS.map(([k,l])=>
+        `<option value="${k}" ${(t?t.status:S.revTab)===k?'selected':''}>${l}</option>`).join('')}</select></div>
+      <div class="field"><label>PRIORITY</label><select id="fPriority">${[['low','Low'],['med','Medium'],['high','High']]
+        .map(([k,l])=>`<option value="${k}" ${(t?t.priority:'low')===k?'selected':''}>${l}</option>`).join('')}</select></div>
+    </div>
+    ${D.group?`<div class="toggle" style="margin-bottom:11px">Keep this private (don't share with the group)
+      <span class="sw ${t&&t.priv?'on':''}" id="fPriv" onclick="this.classList.toggle('on')"><i></i></span></div>`:''}
+    <div class="toggle" style="margin-bottom:11px">
+      <span>⏰ Reminders · ${S.formRem.length?S.formRem.map(r=>offLabel(r.off)).join(', '):'none'}</span>
+      <button class="btn sm" onclick="remModal()">Set</button></div>
+    <div class="field"><label>NOTES</label>${toolbar('fHtml')}
+      <div class="rt" id="fHtml" contenteditable="true">${t?t.html:''}</div></div>
+    <div class="acts">
+      <button class="btn primary" onclick="saveTask(${isNew?'null':t.id})">${isNew?'Add task':'Save changes'}</button>
+      <button class="btn" onclick="S.addingTask=false;S.editTask=null;S.formRem=null;render()">Cancel</button>
+    </div>
+  </div>`;
+}
+function editTask(id){const t=task(id);S.date=t.date;S.revTab=t.status;S.screen='review';S.editTask=id;S.addingTask=false;S.formRem=null;render()}
+function saveTask(id){
+  const title=$('#fTitle').value.trim(); if(!title){$('#fTitle').focus();return}
+  const o={title,time:$('#fTime').value,date:$('#fDate').value,status:$('#fStatus').value,
+    priority:$('#fPriority').value,html:$('#fHtml').innerHTML,
+    reminders:S.formRem.map(r=>({...r,firedFor:null,snoozeAt:null})),
+    priv:!canEdit()||!!(D.group&&$('#fPriv')&&$('#fPriv').classList.contains('on')),
+    by:(id!==null&&task(id).by)||D.me||''};
+  if(id===null) D.tasks.push({id:nid(),comments:[],noteIds:[],...o});
+  else Object.assign(task(id),o);
+  S.date=o.date;S.revTab=o.status;S.addingTask=false;S.editTask=null;S.formRem=null;render();toast(id===null?'Task added':'Saved');
+}
+function setStatus(id,st){task(id).status=st;if(S.screen==='review')S.revTab=st;render();toast('Moved to '+st)}
+function delTask(id){if(confirm('Delete "'+task(id).title+'"?')){D.tasks=D.tasks.filter(t=>t.id!==id);render();toast('Deleted')}}
+function addComment(id){const el=$('#cm'+id),v=el.value.trim();if(!v)return;
+  task(id).comments.push({id:nid(),text:v,at:Date.now()});S.openIds.add(id);render();}
+function delComment(tid,cid){const t=task(tid);t.comments=t.comments.filter(c=>c.id!==cid);render()}
+
+/* ---- rich text ---- */
+function toolbar(target){
+  const b=(cmd,label,arg)=>`<button class="tb ${label.length>2?'w':''}" onmousedown="event.preventDefault()"
+    onclick="cmd('${cmd}','${arg||''}')" title="${cmd}">${label}</button>`;
+  return `<div class="toolbar">
+    ${b('bold','<b>B</b>')}${b('italic','<i>I</i>')}${b('underline','<u>U</u>')}${b('strikeThrough','<s>S</s>')}
+    ${b('formatBlock','H1','<h1>')}${b('formatBlock','H2','<h2>')}
+    ${b('insertUnorderedList','•')}${b('insertOrderedList','1.')}
+    <button class="tb" onmousedown="event.preventDefault()" onclick="insertCheck()" title="checklist">☑</button>
+    <button class="tb" onmousedown="event.preventDefault()" onclick="hilite()" title="highlight">🖍</button>
+    <button class="tb" onmousedown="event.preventDefault()" onclick="insertImg('${target}')" title="image">🖼</button>
+    <button class="tb" onmousedown="event.preventDefault()" onclick="insertLink()" title="link">🔗</button>
+    <button class="tb w" onmousedown="event.preventDefault()" onclick="enhance('${target}')" title="AI: improve this writing">✨ Enhance</button>
+    ${b('removeFormat','⌫')}
+  </div>`;
+}
+function cmd(c,a){document.execCommand(c,false,a||null)}
+function hilite(){const c=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  document.execCommand('hiliteColor',false,c+'55')}
+function insertCheck(){document.execCommand('insertHTML',false,'<div><input type="checkbox"> &nbsp;</div>')}
+function insertLink(){const u=prompt('Link URL','https://');if(u)document.execCommand('createLink',false,u)}
+function insertImg(target){pickImage(src=>{
+  const el=document.getElementById(target); el.focus();
+  document.execCommand('insertHTML',false,`<img src="${src}">`);
+})}
+
+/* ---- VOICE ---- */
+function drawVoice(){
+  $('#s-voice').innerHTML=`
+    <button class="btn primary wide" onclick="toggleRec()" style="${S.recording?'background:#E05656;color:#fff':''}">
+      ${S.recording?'⏹ Stop recording':'🎤 Start recording'}</button>
+    <div class="row" style="margin-bottom:14px">
+      <button class="btn" onclick="typeVoice()" style="flex:1">⌨️ Type instead</button>
+      <button class="btn" onclick="uploadAudio()" style="flex:1">📁 Upload audio</button>
+    </div>
+    ${S.busy?`<div class="busy">${S.busy}</div>`:''}
+    ${D.voice.length?D.voice.map(v=>`
+      <div class="task">
+        <div class="ttitle">${esc(v.text||'Voice note')}</div>
+        <div class="ttime">${stamp(v.at)}</div>
+        ${v.audio?`<audio controls src="${v.audio}" style="width:100%;margin-top:10px"></audio>`:''}
+        ${v.transcript?`<div class="comment" style="margin-top:10px">${esc(v.transcript)}</div>`:''}
+        ${v.ai?`<div class="sect">AI OUTPUT</div><div class="rt-view">${v.ai}</div>`:''}
+        <div class="acts">
+          ${v.audio?`<button class="btn sm primary" onclick="transcribe(${v.id})">🎧 Transcribe audio</button>`:''}
+          <button class="btn sm" onclick="voiceAI(${v.id},'clean')">✨ Clean up</button>
+          <button class="btn sm" onclick="voiceAI(${v.id},'notes')">📝 Make notes</button>
+          <button class="btn sm" onclick="voiceAI(${v.id},'tasks')">✅ Extract tasks</button>
+          <button class="btn sm" onclick="voiceToTask(${v.id})">Turn into task</button>
+          <button class="btn sm" onclick="voiceToNote(${v.id})">Save as note</button>
+          <button class="btn sm danger" onclick="D.voice=D.voice.filter(x=>x.id!==${v.id});render()">Delete</button>
+        </div>
+      </div>`).join(''):'<div class="empty">No voice notes yet. Record, or type it if the mic is blocked.<br>Mic needs a real server — on file:// Chrome blocks it.</div>'}`;
+}
+let rec,chunks,sr,liveText='';
+async function toggleRec(){
+  if(S.recording){ rec&&rec.state!=='inactive'&&rec.stop(); sr&&sr.stop(); return; }
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    chunks=[];liveText='';
+    const pick=['audio/mp4','audio/ogg;codecs=opus','audio/webm;codecs=opus','audio/webm']
+      .find(m=>window.MediaRecorder&&MediaRecorder.isTypeSupported(m));
+    rec=new MediaRecorder(stream,pick?{mimeType:pick}:undefined);
+    rec.ondataavailable=e=>chunks.push(e.data);
+    rec.onstop=()=>{
+      stream.getTracks().forEach(t=>t.stop());
+      const r=new FileReader();
+      r.onload=()=>{
+        D.voice.unshift({id:nid(),text:(liveText||'Voice note').slice(0,60),transcript:liveText.trim(),
+          audio:r.result,ai:'',at:Date.now()});
+        S.recording=false;render();
+      };
+      r.readAsDataURL(new Blob(chunks,{type:(rec&&rec.mimeType)||'audio/webm'}));
+    };
+    const SRc=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(SRc){sr=new SRc();sr.continuous=true;sr.interimResults=false;sr.lang='en-US';
+      sr.onresult=e=>{for(let i=e.resultIndex;i<e.results.length;i++) liveText+=e.results[i][0].transcript+' '};
+      try{sr.start()}catch(e){}}
+    rec.start();S.recording=true;render();
+  }catch(e){ alert('Mic unavailable (file:// blocks it). Use "Type instead", or serve the folder over http.') }
+}
+function uploadAudio(){
+  const el=document.createElement('input');el.type='file';el.accept='audio/*';
+  el.onchange=()=>{const f=el.files[0];if(!f)return;const r=new FileReader();
+    r.onload=()=>{const v={id:nid(),text:f.name,transcript:'',audio:r.result,ai:'',at:Date.now()};
+      D.voice.unshift(v);render();transcribe(v.id)};
+    r.readAsDataURL(f)};
+  el.click();
+}
+function typeVoice(){const t=prompt('Reminder / note');if(!t)return;
+  D.voice.unshift({id:nid(),text:t.slice(0,60),transcript:t,audio:null,ai:'',at:Date.now()});render()}
+function voiceToTask(id){const v=D.voice.find(x=>x.id===id);
+  D.tasks.push({id:nid(),date:S.date,title:(v.transcript||v.text).slice(0,60),time:'09:00',status:'open',
+    priority:'low',html:`<p>${esc(v.transcript||v.text)}</p>`,comments:[],noteIds:[]});
+  S.screen='review';S.revTab='open';render();toast('Task created — edit it here')}
+function voiceToNote(id){const v=D.voice.find(x=>x.id===id);
+  const n={id:nid(),title:v.text||'Voice note',html:v.ai||`<p>${esc(v.transcript||'')}</p>`,tags:['voice'],
+    taskId:null,pinned:false,at:Date.now(),updated:Date.now()};
+  D.notes.unshift(n);S.screen='notes';S.noteEdit=n.id;render();toast('Saved as note')}
+
+/* ---- AI ---- */
+async function aiParts(parts){
+  if(!D.aiKey) throw new Error('Add your Gemini API key in Settings first.');
+  const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${D.aiKey}`,
+    {method:'POST',headers:{'Content-Type':'application/json'},
+     body:JSON.stringify({contents:[{parts}]})});
+  const d=await r.json();
+  if(d.error) throw new Error(d.error.message);
+  return ((d.candidates&&d.candidates[0].content.parts[0].text)||'').replace(/```html|```/g,'').trim();
+}
+const ai=prompt=>aiParts([{text:prompt}]);
+
+/* send the recording itself to Gemini and get words back */
+async function transcribe(id){
+  const v=D.voice.find(x=>x.id===id);
+  if(!v.audio) return toast('No audio on this one');
+  S.busy='Transcribing…';render();
+  try{
+    const mime=(v.audio.match(/^data:([^;]+);/)||[])[1]||'audio/webm';
+    const b64=v.audio.split(',')[1];
+    v.transcript=await aiParts([
+      {text:'Transcribe this audio verbatim. Return plain text only, no commentary.'},
+      {inline_data:{mime_type:mime,data:b64}}
+    ]);
+    if(!v.text||v.text==='Voice note') v.text=v.transcript.slice(0,60);
+  }catch(e){ alert('Transcription failed: '+e.message+'\n\nIf the format is rejected, use the live transcript or type it.') }
+  S.busy='';render();
+}
+
+/* rewrite whatever is in a rich-text box */
+async function enhance(target){
+  const el=document.getElementById(target);
+  const text=(el.innerText||'').trim();
+  if(!text) return toast('Nothing to enhance');
+  S.busy='Rewriting…';render();
+  try{
+    const out=await ai(`Improve this writing: fix grammar and spelling, tighten it, keep the meaning and the writer's voice. Return simple HTML only.\n\n${text}`);
+    const el2=document.getElementById(target); if(el2) el2.innerHTML=out;
+  }catch(e){ alert('AI error: '+e.message) }
+  S.busy='';render(false);
+  const el3=document.getElementById(target); if(el3) el3.focus();
+}
+const AI_PROMPTS={
+  clean:t=>`Clean up this dictated note. Fix grammar, keep the meaning and the person's voice. Return simple HTML only:\n\n${t}`,
+  notes:t=>`Turn this into tidy bullet notes. Return simple HTML (<ul><li>) only:\n\n${t}`,
+  tasks:t=>`Extract action items as an HTML checklist (<ul><li>). Nothing else:\n\n${t}`
+};
+async function voiceAI(id,mode){
+  const v=D.voice.find(x=>x.id===id);
+  const src=v.transcript||v.text;
+  if(!src) return toast('Nothing to work with');
+  S.busy='Thinking…';render();
+  try{ v.ai=await ai(AI_PROMPTS[mode](src)); }
+  catch(e){ alert('AI error: '+e.message) }
+  S.busy='';render();
+}
+
+/* ---- SCAN ---- */
+function drawScan(){
+  $('#s-scan').innerHTML=`
+    <div class="row" style="margin-bottom:14px">
+      <button class="btn primary" style="flex:1;padding:13px" onclick="grab(true)">📷 Take photo</button>
+      <button class="btn" style="flex:1;padding:13px" onclick="grab(false)">🖼 Choose file</button>
+    </div>
+    ${D.scans.length?D.scans.map(s=>`
+      <div class="task">
+        <img class="media" src="${s.scan||s.src}">
+        <div class="ttitle">${esc(s.name)}</div>
+        <div class="ttime">${stamp(s.at)}${s.scan?' · scanned':''}</div>
+        <div class="field" style="margin-top:10px">
+          <textarea id="sn${s.id}" placeholder="Notes about this image…">${esc(s.notes)}</textarea>
+        </div>
+        <div class="acts">
+          <button class="btn sm primary" onclick="saveScanNotes(${s.id})">Save notes</button>
+          <button class="btn sm" onclick="toggleScan(${s.id})">${s.scan?'Show original':'Scan as document'}</button>
+          <button class="btn sm" onclick="scanToTask(${s.id})">Turn into task</button>
+          <button class="btn sm" onclick="scanToNote(${s.id})">Save as note</button>
+          <button class="btn sm danger" onclick="D.scans=D.scans.filter(x=>x.id!==${s.id});render()">Delete</button>
+        </div>
+      </div>`).join(''):'<div class="empty">Nothing scanned yet. Snap a prescription, lab report or chart — then add notes or turn it into a task.</div>'}`;
+}
+function grab(capture){pickImage((src,name)=>{
+  D.scans.unshift({id:nid(),name:name||'Photo',src,scan:null,notes:'',at:Date.now()});render();toast('Saved')},capture)}
+function saveScanNotes(id){const s=D.scans.find(x=>x.id===id);s.notes=$('#sn'+id).value;render();toast('Notes saved')}
+function toggleScan(id){
+  const s=D.scans.find(x=>x.id===id);
+  if(s.scan){s.scan=null;render();return}
+  const img=new Image();
+  img.onload=()=>{
+    const c=document.createElement('canvas');
+    const w=Math.min(img.width,1400),k=w/img.width;
+    c.width=w;c.height=img.height*k;
+    const x=c.getContext('2d');x.drawImage(img,0,0,c.width,c.height);
+    const d=x.getImageData(0,0,c.width,c.height),p=d.data;
+    for(let i=0;i<p.length;i+=4){
+      let g=p[i]*.3+p[i+1]*.59+p[i+2]*.11;
+      g=g<118?0:g>150?255:(g-118)*8;
+      g=Math.max(0,Math.min(255,g));
+      p[i]=p[i+1]=p[i+2]=g;
+    }
+    x.putImageData(d,0,0);
+    s.scan=c.toDataURL('image/jpeg',.8);render();toast('Scanned');
+  };
+  img.src=s.src;
+}
+function scanToTask(id){const s=D.scans.find(x=>x.id===id);
+  D.tasks.push({id:nid(),date:S.date,title:'Review '+s.name,time:'09:00',status:'open',priority:'low',
+    html:`<img src="${s.scan||s.src}">${s.notes?`<p>${esc(s.notes)}</p>`:''}`,comments:[],noteIds:[]});
+  const t=D.tasks[D.tasks.length-1];
+  S.screen='review';S.revTab='open';S.editTask=t.id;render();toast('Edit and save')}
+function scanToNote(id){const s=D.scans.find(x=>x.id===id);
+  const n={id:nid(),title:s.name,html:`<img src="${s.scan||s.src}">${s.notes?`<p>${esc(s.notes)}</p>`:''}`,
+    tags:['scan'],taskId:null,pinned:false,at:Date.now(),updated:Date.now()};
+  D.notes.unshift(n);S.screen='notes';S.noteEdit=n.id;render()}
+
+/* ---- NOTES ---- */
+function drawNotes(){
+  if(S.noteEdit){ drawNoteEditor(); return; }
+  const tags=[...new Set(D.notes.flatMap(n=>n.tags||[]))];
+  const q=S.noteQuery.toLowerCase();
+  let list=D.notes.filter(n=>
+    (!q||(n.title+' '+strip(n.html)+' '+(n.tags||[]).join(' ')).toLowerCase().includes(q))&&
+    (!S.tagFilter||(n.tags||[]).includes(S.tagFilter)));
+  list=[...list].sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0)||b.updated-a.updated);
+  $('#s-notes').innerHTML=`
+    <div class="field"><input id="nq" value="${esc(S.noteQuery)}" placeholder="Search notes…"
+      oninput="S.noteQuery=this.value;drawNotes();const e=document.getElementById('nq');e.focus();e.setSelectionRange(e.value.length,e.value.length)"></div>
+    <button class="btn primary wide" onclick="newNote()">+ New note</button>
+    ${tags.length?`<div class="chips">
+      <button class="chip ${!S.tagFilter?'on':''}" onclick="S.tagFilter='';render()">All</button>
+      ${tags.map(t=>`<button class="chip ${S.tagFilter===t?'on':''}" onclick="S.tagFilter='${esc(t)}';render()">#${esc(t)}</button>`).join('')}
+    </div>`:''}
+    ${list.length?list.map(n=>{const t=n.taskId?task(n.taskId):null;return `
+      <div class="ncard" onclick="openNote(${n.id})">
+        <h4>${n.pinned?'📌 ':''}${esc(n.title||'Untitled')}</h4>
+        <div class="snip">${esc(strip(n.html).slice(0,140))||'Empty note'}</div>
+        <div class="tags">
+          ${(n.tags||[]).map(x=>`<span class="tag">#${esc(x)}</span>`).join('')}
+          ${t?`<span class="tag">🔗 ${esc(t.title)}</span>`:''}
+          <span class="tag" style="color:var(--muted)">${stamp(n.updated)}</span>
+        </div>
+      </div>`}).join(''):'<div class="empty">No notes yet.</div>'}`;
+}
+function newNote(){
+  const n={id:nid(),title:'',html:'',tags:[],taskId:null,pinned:false,at:Date.now(),updated:Date.now()};
+  D.notes.unshift(n);S.noteEdit=n.id;S.screen='notes';render();
+}
+function openNote(id){S.screen='notes';S.noteEdit=id;render()}
+function drawNoteEditor(){
+  const n=note(S.noteEdit); if(!n){S.noteEdit=null;return drawNotes()}
+  $('#s-notes').innerHTML=`
+    <div class="row" style="margin-bottom:12px">
+      <button class="btn" onclick="saveNote(true)">‹ Back</button>
+      <button class="btn primary" onclick="saveNote()">Save</button>
+      <button class="btn" onclick="togglePin(${n.id})">${n.pinned?'📌 Unpin':'📌 Pin'}</button>
+      <button class="btn danger" onclick="delNote(${n.id})">Delete</button>
+    </div>
+    <div class="field"><label>TITLE</label><input id="nTitle" value="${esc(n.title)}" placeholder="Note title"></div>
+    <div class="field"><label>BODY</label>${toolbar('nBody')}
+      <div class="rt" id="nBody" contenteditable="true" style="min-height:220px">${n.html}</div></div>
+    <div class="two">
+      <div class="field"><label>TAGS (comma separated)</label><input id="nTags" value="${esc((n.tags||[]).join(', '))}" placeholder="health, doctor"></div>
+      <div class="field"><label>LINK TO TASK</label><select id="nTask">
+        <option value="">— none —</option>
+        ${D.tasks.map(t=>`<option value="${t.id}" ${n.taskId===t.id?'selected':''}>${esc(t.title)} · ${fmtShort(t.date)}</option>`).join('')}
+      </select></div>
+    </div>
+    <div class="ttime">Last edited ${stamp(n.updated)}</div>`;
+}
+function saveNote(back){
+  const n=note(S.noteEdit); if(!n) return;
+  n.title=$('#nTitle').value.trim();
+  n.html=$('#nBody').innerHTML;
+  n.tags=$('#nTags').value.split(',').map(s=>s.trim().replace(/^#/,'')).filter(Boolean);
+  const tid=$('#nTask').value?Number($('#nTask').value):null;
+  if(n.taskId&&n.taskId!==tid){const old=task(n.taskId);if(old)old.noteIds=(old.noteIds||[]).filter(x=>x!==n.id)}
+  n.taskId=tid;
+  if(tid){const t=task(tid);t.noteIds=t.noteIds||[];if(!t.noteIds.includes(n.id))t.noteIds.push(n.id)}
+  n.updated=Date.now();
+  if(back)S.noteEdit=null;
+  render();toast('Note saved');
+}
+function togglePin(id){note(id).pinned=!note(id).pinned;render()}
+function delNote(id){
+  if(!confirm('Delete this note?'))return;
+  const n=note(id);
+  if(n.taskId){const t=task(n.taskId);if(t)t.noteIds=(t.noteIds||[]).filter(x=>x!==id)}
+  D.notes=D.notes.filter(x=>x.id!==id);S.noteEdit=null;render();toast('Deleted');
+}
+
+/* ---- modals ---- */
+function moveModal(id){
+  $('#modal').innerHTML=`<h3>Move to date</h3>
+    <div class="field"><input id="mDate" type="date" value="${task(id).date}"></div>
+    <div class="acts"><button class="btn primary" onclick="doMove(${id})">Move</button>
+    <button class="btn" onclick="closeModal()">Cancel</button></div>`;
+  $('#mask').classList.add('on');
+}
+function doMove(id){const to=$('#mDate').value;if(!to)return;task(id).date=to;S.date=to;closeModal();render();toast('Moved')}
+function linkNoteModal(id){
+  $('#modal').innerHTML=`<h3>Link a note</h3>
+    ${D.notes.length?D.notes.map(n=>`<div class="comment" style="cursor:pointer" onclick="doLink(${id},${n.id})">
+      📝 ${esc(n.title||'Untitled')}</div>`).join(''):'<div class="empty">No notes yet.</div>'}
+    <div class="acts"><button class="btn" onclick="closeModal()">Close</button></div>`;
+  $('#mask').classList.add('on');
+}
+function doLink(tid,nid_){
+  const t=task(tid);t.noteIds=t.noteIds||[];
+  if(!t.noteIds.includes(nid_))t.noteIds.push(nid_);
+  note(nid_).taskId=tid;
+  closeModal();S.openIds.add(tid);render();toast('Linked');
+}
+function remList(tid){ return tid?task(tid).reminders:S.formRem }
+function remModal(tid){
+  S.remFor=tid===undefined?null:tid;
+  if(S.remFor===null&&S.screen==='settings') S.formRem=D.defRem;
+  drawRemModal(); $('#mask').classList.add('on');
+}
+function drawRemModal(){
+  const tid=S.remFor, list=remList(tid);
+  $('#modal').innerHTML=`<h3>⏰ Set reminders${tid?' — '+esc(task(tid).title):''}</h3>
+    ${list.length?list.map((r,i)=>`
+      <div class="prop" style="border-style:solid;margin-bottom:9px">
+        <div class="sect" style="margin:0 0 7px">REMINDER ${i+1}</div>
+        <div class="field"><label>WHEN</label>
+          <select onchange="setRem(${i},'off',this.value)">${OFFS.map(([o,l])=>
+            `<option value="${o}" ${+r.off===o?'selected':''}>${l}</option>`).join('')}</select></div>
+        <div class="field"><label>TYPE</label>
+          <select onchange="setRem(${i},'type',this.value)">${RTYPES.map(([k,l])=>
+            `<option value="${k}" ${r.type===k?'selected':''}>${l}</option>`).join('')}</select></div>
+        <button class="btn sm danger" onclick="dropRem(${i})">Remove</button>
+      </div>`).join(''):'<div class="empty">No reminders on this task.</div>'}
+    <div class="acts">
+      <button class="btn" onclick="addRem()">+ Add reminder</button>
+      <button class="btn primary" onclick="closeRem()">Done</button>
+    </div>`;
+}
+function addRem(){ const l=remList(S.remFor); l.push({id:nid(),off:l.length?0:0,type:'both',snoozeAt:null,firedFor:null}); drawRemModal() }
+function setRem(i,k,v){ const r=remList(S.remFor)[i]; r[k]=k==='off'?+v:v; r.firedFor=null; r.snoozeAt=null; drawRemModal() }
+function dropRem(i){ remList(S.remFor).splice(i,1); drawRemModal() }
+function closeRem(){
+  closeModal();
+  if(S.remFor===null&&S.screen==='settings'){ D.defRem=S.formRem; S.formRem=null }
+  S.remFor=null; persist(); render();
+}
+function closeModal(){$('#mask').classList.remove('on')}
+$('#mask').addEventListener('click',e=>{if(e.target.id==='mask')closeModal()});
+
+/* ---- FAMILY GROUP (Firebase sync) ---- */
+const FB={db:null,uid:null,unsub:[],last:{tasks:{},notes:{}},timer:null,status:''};
+const CDN='https://www.gstatic.com/firebasejs/10.12.0/';
+
+async function fbStart(){
+  if(FB.db) return true;
+  let cfg; try{ cfg=JSON.parse(D.fbCfg) }catch(e){ throw new Error('Firebase config is not valid JSON') }
+  const {initializeApp}=await import(CDN+'firebase-app.js');
+  const fs=await import(CDN+'firebase-firestore.js');
+  const {getAuth,signInAnonymously,onAuthStateChanged}=await import(CDN+'firebase-auth.js');
+  const app=initializeApp(cfg);
+  FB.fs=fs; FB.db=fs.getFirestore(app);
+  const auth=getAuth(app);
+  await signInAnonymously(auth);
+  FB.uid=await new Promise(r=>onAuthStateChanged(auth,u=>u&&r(u.uid)));
+  return true;
+}
+function groupPath(){ return 'groups/'+D.group.code }
+async function fbListen(){
+  const {collection,onSnapshot,doc,setDoc}=FB.fs;
+  FB.unsub.forEach(u=>u()); FB.unsub=[];
+  await setDoc(doc(FB.db,groupPath()+'/members',FB.uid),{name:D.me||'Someone',at:Date.now()},{merge:true});
+  ['tasks','notes'].forEach(kind=>{
+    FB.unsub.push(onSnapshot(collection(FB.db,groupPath()+'/'+kind),snap=>{
+      const cloud=[]; FB.last[kind]={};
+      snap.forEach(d=>{ const v=d.data(); cloud.push(v); FB.last[kind][d.id]=JSON.stringify(v) });
+      if(kind==='tasks') D.tasks=[...D.tasks.filter(t=>t.priv),...cloud];
+      else D.notes=[...D.notes.filter(n=>n.priv),...cloud];
+      FB.status='Synced '+new Date().toLocaleTimeString();
+      render(false); persist();
+    },err=>{ FB.status='Sync error: '+err.message; render(false) }));
+  });
+  FB.unsub.push(onSnapshot(collection(FB.db,groupPath()+'/members'),snap=>{
+    D.members=[]; snap.forEach(d=>D.members.push({uid:d.id,...d.data()}));
+    const me=D.members.find(m=>m.uid===FB.uid);
+    D.role=me?me.role||'viewer':'viewer';
+    render(false); persist();
+  }));
+}
+function fbPush(){
+  if(!D.group||!FB.db||!canEdit()) return;
+  clearTimeout(FB.timer);
+  FB.timer=setTimeout(async()=>{
+    const {doc,setDoc,deleteDoc}=FB.fs;
+    for(const kind of ['tasks','notes']){
+      const mine=(kind==='tasks'?D.tasks:D.notes).filter(x=>!x.priv);
+      const seen={};
+      for(const x of mine){
+        const rec=JSON.parse(JSON.stringify({...x,by:x.by||D.me||'Someone',updatedAt:Date.now()}));
+        delete rec.updatedAt;
+        const key=String(x.id); seen[key]=1;
+        const body=JSON.stringify(rec);
+        if(FB.last[kind][key]!==body){
+          FB.last[kind][key]=body;
+          try{ await setDoc(doc(FB.db,groupPath()+'/'+kind,key),rec) }catch(e){ FB.status='Push failed: '+e.message }
+        }
+      }
+      for(const key of Object.keys(FB.last[kind])) if(!seen[key]){
+        delete FB.last[kind][key];
+        try{ await deleteDoc(doc(FB.db,groupPath()+'/'+kind,key)) }catch(e){}
+      }
+    }
+  },900);
+}
+const CODE=()=>Array.from({length:6},()=>'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random()*32)]).join('');
+const canEdit=()=>!D.group||D.role==='owner'||D.role==='editor';
+const isOwner=()=>D.group&&D.role==='owner';
+const ROLES=[['owner','👑 Owner'],['editor','✏️ Can edit'],['viewer','👀 View only']];
+const roleLabel=r=>(ROLES.find(x=>x[0]===r)||['','👀 View only'])[1];
+
+async function joinGroup(code,asOwner){
+  if(!D.me.trim()) return alert('Add your name first — the family needs to know who added what.');
+  code=(code||'').toUpperCase().trim();
+  if(code.length<4) return alert('Enter the 6-character group code');
+  FB.status='Connecting…'; render();
+  try{
+    await fbStart();
+    const {doc,setDoc,getDoc}=FB.fs;
+    D.seq += Math.floor(Math.random()*900000)+1000;   // keep ids unique across phones
+    D.group={code};
+    const mref=doc(FB.db,groupPath()+'/members',FB.uid);
+    const existing=await getDoc(mref);
+    if(!existing.exists()){
+      await setDoc(doc(FB.db,'groups',code),{code,createdBy:FB.uid,at:Date.now()},{merge:true});
+      await setDoc(mref,{name:D.me,role:asOwner?'owner':'viewer',at:Date.now()});
+      D.role=asOwner?'owner':'viewer';
+    }
+    await fbListen();
+    if(canEdit()) fbPush();
+    FB.status='Connected';
+    render();
+    toast(asOwner?'Group '+code+' created':'Joined — view only until the owner gives you edit access');
+  }catch(e){ FB.status=''; alert('Could not connect: '+e.message); render() }
+}
+async function setRole(uid,role){
+  if(!isOwner()) return;
+  const {doc,setDoc}=FB.fs;
+  await setDoc(doc(FB.db,groupPath()+'/members',uid),{role},{merge:true});
+  toast('Access updated');
+}
+async function removeMember(uid){
+  if(!isOwner()||!confirm('Remove this person from the group?')) return;
+  const {doc,deleteDoc}=FB.fs;
+  await deleteDoc(doc(FB.db,groupPath()+'/members',uid));
+}
+function leaveGroup(){
+  if(!confirm('Leave the group? Shared items stay with the others; your own copy stays on this device.')) return;
+  FB.unsub.forEach(u=>u()); FB.unsub=[]; FB.last={tasks:{},notes:{}};
+  D.group=null; D.members=[]; FB.status=''; render(); toast('Left the group');
+}
+
+/* ---- SETTINGS ---- */
+function drawSettings(){
+  $('#s-settings').innerHTML=`
+    <div class="sect">COLOR THEME</div>
+    <div class="opts">${Object.entries(THEMES).map(([k,v])=>
+      `<div class="opt ${D.theme===k?'on':''}" onclick="D.theme='${k}';render()">
+        <span class="dot" style="background:${v.accent}"></span>${v.label}</div>`).join('')}</div>
+    <div class="sect">MOOD</div>
+    <div class="opts">${Object.entries(MOODS).map(([k,v])=>
+      `<div class="opt ${D.mood===k?'on':''}" onclick="D.mood='${k}';render()">${v}</div>`).join('')}</div>
+    <div class="sect">AI ASSISTANT (GEMINI)</div>
+    <div class="task"><div class="ttime">One key powers all of it: transcribing your recordings, turning them into
+      notes or tasks, and the ✨ Enhance button that rewrites anything you've typed. Get a key at
+      aistudio.google.com → API keys. It stays on this device.</div></div>
+    <div class="field" style="margin-top:11px"><input id="aiKey" value="${esc(D.aiKey)}" placeholder="Paste your Gemini API key"></div>
+    <button class="btn wide" onclick="D.aiKey=document.getElementById('aiKey').value.trim();render();toast('Key saved')">Save key</button>
+    <div class="sect">REMINDERS</div>
+    <div class="toggle">Reminders &amp; push notifications
+      <span class="sw ${D.reminders?'on':''}" onclick="askNotify()"><i></i></span></div>
+    <div class="toggle">Alarm sound
+      <span class="sw ${D.alarmSound?'on':''}" onclick="D.alarmSound=!D.alarmSound;render();if(D.alarmSound)beep()"><i></i></span></div>
+    <div class="field"><label>DEFAULT SNOOZE</label><select onchange="D.snoozeMin=+this.value;render()">
+      ${[5,10,15,30].map(m=>`<option value="${m}" ${D.snoozeMin===m?'selected':''}>${m} minutes</option>`).join('')}
+    </select></div>
+    <div class="toggle">Default reminders on new tasks
+      <button class="btn sm" onclick="remModal()">${D.defRem.length?D.defRem.map(r=>offLabel(r.off)).join(', '):'none'}</button></div>
+    <button class="btn wide" onclick="testAlarm()">Test the alarm</button>
+    <div class="sect">FAMILY GROUP</div>
+    ${D.group?`
+      <div class="task">
+        <div class="ttitle">Group code · ${esc(D.group.code)}</div>
+        <div class="ttime">Share this code — anyone who enters it sees and edits the same tasks and notes.
+          ${FB.status?'<br>'+esc(FB.status):''}</div>
+        <div class="ttime" style="margin-top:8px">You are ${roleLabel(D.role)}${isOwner()?' — you decide who can edit.':''}</div>
+        <div class="acts">
+          <button class="btn sm" onclick="navigator.clipboard&&navigator.clipboard.writeText('${D.group.code}');toast('Code copied')">Copy code</button>
+          <button class="btn sm danger" onclick="leaveGroup()">Leave group</button>
+        </div>
+      </div>
+      <div class="sect">WHO'S IN</div>
+      ${D.members.map(m=>`
+        <div class="task">
+          <div class="ttitle">👤 ${esc(m.name||'Someone')}${m.uid===FB.uid?' (you)':''}</div>
+          ${isOwner()&&m.uid!==FB.uid?`
+            <div class="field" style="margin-top:9px"><label>ACCESS</label>
+              <select onchange="setRole('${m.uid}',this.value)">${ROLES.map(([k,l])=>
+                `<option value="${k}" ${(m.role||'viewer')===k?'selected':''}>${l}</option>`).join('')}</select></div>
+            <button class="btn sm danger" onclick="removeMember('${m.uid}')">Remove</button>`
+          :`<div class="ttime">${roleLabel(m.role)}</div>`}
+        </div>`).join('')||'<div class="empty">Just you so far. Share the code.</div>'}`:`
+      <div class="task"><div class="ttime">Share tasks and notes with family — everyone in the group sees the same
+        list live, and each item shows who added it. Whoever creates the group owns it and hands out access — View only or Can edit — per person.
+        Anything marked 🔒 Private stays on your phone.
+        Needs a free Firebase project (yours: ankita-61918) — Firebase console → Project settings →
+        Your apps → Web app → copy the config object.</div></div>
+      <div class="field" style="margin-top:11px"><label>YOUR NAME</label>
+        <input id="meName" value="${esc(D.me)}" placeholder="Ankita"></div>
+      <div class="field"><label>FIREBASE CONFIG (JSON)</label>
+        <textarea id="fbCfg" placeholder='{"apiKey":"…","authDomain":"…","projectId":"ankita-61918","appId":"…"}'>${esc(D.fbCfg)}</textarea></div>
+      <button class="btn wide" onclick="saveGroupCfg()">Save details</button>
+      <div class="two">
+        <button class="btn" style="padding:13px" onclick="saveGroupCfg();joinGroup('${CODE()}',true)">Create a group</button>
+        <button class="btn" style="padding:13px" onclick="saveGroupCfg();joinGroup(prompt('Group code'),false)">Join with a code</button>
+      </div>
+      ${FB.status?`<div class="busy">${esc(FB.status)}</div>`:''}`}
+    <div class="sect">DATA</div>
+    <div class="row">
+      <button class="btn" onclick="exportData()">Export backup</button>
+      <button class="btn" onclick="importData()">Import backup</button>
+      <button class="btn danger" onclick="wipe()">Reset app</button>
+    </div>
+    <div class="sect">ABOUT</div>
+    <div class="task"><div class="ttime">Anki Reminder v2.0 · ${D.tasks.length} tasks, ${D.notes.length} notes,
+      ${D.voice.length} voice, ${D.scans.length} scans. Everything saves to this browser automatically.</div></div>`;
+}
+function saveGroupCfg(){
+  const n=$('#meName'), c=$('#fbCfg');
+  if(n) D.me=n.value.trim();
+  if(c) D.fbCfg=c.value.trim();
+  persist();
+}
+function testAlarm(){
+  const t=D.tasks.find(x=>x.status!=='done')||D.tasks[0];
+  if(!t) return toast('Add a task first');
+  S.alarm={t:t.id,r:(t.reminders&&t.reminders[0]||{}).id}; beep(); render();
+}
+function exportData(){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(D)],{type:'application/json'}));
+  a.download='anki-reminder-backup.json';a.click();
+}
+function importData(){
+  const el=document.createElement('input');el.type='file';el.accept='.json';
+  el.onchange=()=>{const r=new FileReader();
+    r.onload=()=>{try{D=JSON.parse(r.result);render();toast('Imported')}catch(e){alert('Bad file')}};
+    r.readAsText(el.files[0])};
+  el.click();
+}
+function wipe(){if(confirm('Delete everything and start fresh?')){D=JSON.parse(JSON.stringify(SEED));render();toast('Reset')}}
+
+render();
+
+/* rejoin the family group on launch */
+if(D.group&&D.fbCfg) fbStart().then(fbListen).catch(()=>{FB.status='Offline — will sync when back online';render(false)});
+
+/* installable app: cache the shell so it opens offline */
+if('serviceWorker' in navigator && location.protocol!=='file:')
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>

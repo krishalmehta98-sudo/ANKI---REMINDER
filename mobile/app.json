@@ -20,7 +20,11 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#4FC3DC"
       },
-      "permissions": ["RECORD_AUDIO", "CAMERA", "VIBRATE"]
+      "permissions": [
+        "RECORD_AUDIO",
+        "CAMERA",
+        "VIBRATE"
+      ]
     },
     "ios": {
       "bundleIdentifier": "com.krish89.ankireminder",
@@ -28,6 +32,11 @@
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Record voice reminders.",
         "NSCameraUsageDescription": "Scan prescriptions and reports."
+      }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "f2afc482-9264-4843-845e-48cbab308a52"
       }
     }
   }

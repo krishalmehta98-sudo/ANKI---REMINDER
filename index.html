@@ -292,7 +292,7 @@ function pickImage(cb,capture){
 }
 
 /* ============ render ============ */
-function render(save){
+function render(save){ if(save!==false) expandRepeatingAndCarryForward();
   if(save!==false) persist();
   const t=THEMES[D.theme]||THEMES.teal, r=document.documentElement.style;
   ['accent','bg','card','card2','line','text','muted'].forEach(k=>r.setProperty('--'+k,t[k]));
@@ -437,7 +437,7 @@ function approve(edit){
   p.tasks.forEach(t=>{
     last={id:nid(),date:t.date,title:t.title,time:t.time,status:'open',priority:t.priority,
       html:t.notes?`<p>${esc(t.notes)}</p>`:'',comments:[],noteIds:[],
-      reminders:JSON.parse(JSON.stringify(D.defRem)).map(r=>({...r,id:nid()}))};
+      reminders:JSON.parse(JSON.stringify(D.defRem)).map(r=>({...r,id:nid()})),repeat:'off',repeatDays:[]};
     D.tasks.push(last);
   });
   (p.notes||[]).forEach(n=>D.notes.unshift({id:nid(),title:n.title||'Note',html:`<p>${esc(n.body||'')}</p>`,
@@ -593,6 +593,8 @@ function taskCard(t,full){
           <span class="pill ${t.status==='done'?'':'acc'}">${STATUS.find(s=>s[0]===t.status)[1]}</span>
           ${t.comments.length?`<span class="pill">💬 ${t.comments.length}</span>`:''}
           ${(t.reminders||[]).length?`<span class="pill">⏰ ${t.reminders.length}</span>`:''}
+          ${t.carryFrom?`<span class="pill">↪️ From yesterday</span>`:''}
+          ${t.repeat&&t.repeat!=='off'?`<span class="pill">🔁 ${t.repeat}</span>`:''}
           ${t.priv?`<span class="pill">🔒 Private</span>`:(D.group&&t.by?`<span class="pill acc">👤 ${esc(t.by)}</span>`:'')}
           ${linked.length?`<span class="pill">📝 ${linked.length}</span>`:''}
         </div>
@@ -638,7 +640,8 @@ function taskForm(t){
     <div class="two">
       <div class="field"><label>STATUS</label><select id="fStatus">${STATUS.map(([k,l])=>
         `<option value="${k}" ${(t?t.status:S.revTab)===k?'selected':''}>${l}</option>`).join('')}</select></div>
-      <div class="field"><label>PRIORITY</label><select id="fPriority">${[['low','Low'],['med','Medium'],['high','High']]
+      <div class="field"><label>REPEAT</label><select id="fRepeat"><option value="off">Off</option><option value="daily">Every day</option></select></div>
+    <div class="field"><label>PRIORITY</label><select id="fPriority">${[['low','Low'],['med','Medium'],['high','High']]
         .map(([k,l])=>`<option value="${k}" ${(t?t.priority:'low')===k?'selected':''}>${l}</option>`).join('')}</select></div>
     </div>
     ${D.group?`<div class="toggle" style="margin-bottom:11px">Keep this private (don't share with the group)
@@ -661,7 +664,7 @@ function saveTask(id){
     priority:$('#fPriority').value,html:$('#fHtml').innerHTML,
     reminders:S.formRem.map(r=>({...r,firedFor:null,snoozeAt:null})),
     priv:!canEdit()||!!(D.group&&$('#fPriv')&&$('#fPriv').classList.contains('on')),
-    by:(id!==null&&task(id).by)||D.me||''};
+    by:(id!==null&&task(id).by)||D.me||'',repeat:$('#fRepeat')?$('#fRepeat').value:'off'};
   if(id===null) D.tasks.push({id:nid(),comments:[],noteIds:[],...o});
   else Object.assign(task(id),o);
   S.date=o.date;S.revTab=o.status;S.addingTask=false;S.editTask=null;S.formRem=null;render();toast(id===null?'Task added':'Saved');

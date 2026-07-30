@@ -221,7 +221,7 @@ function persist(){
   if(typeof fbPush==='function') fbPush();
 }
 
-const TODAY=new Date(2026,6,29);
+const TODAY=(()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate())})();
 const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const T_ISO=iso(TODAY);
 const DOWS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -263,7 +263,7 @@ const THEMES={
 const MOODS={energized:'🔋 Energized',neutral:'😐 Neutral',overwhelmed:'😰 Overwhelmed',moody:'😔 Moody'};
 const STATUS=[['open','OPEN'],['progress','IN PROGRESS'],['done','DONE']];
 
-let S={screen:'home',month:new Date(2026,6,1),date:T_ISO,homeFilter:'today',showDone:true,
+let S={screen:'home',month:new Date(TODAY.getFullYear(),TODAY.getMonth(),1),date:T_ISO,homeFilter:'today',showDone:true,
   calTab:'open',revTab:'open',openIds:new Set(),editTask:null,addingTask:false,
   noteEdit:null,noteQuery:'',tagFilter:'',recording:false,busy:'',pending:null,alarm:null,formRem:null,remFor:null,
   expandedFor:null};

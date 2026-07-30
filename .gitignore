@@ -1,0 +1,6 @@
+node_modules/
+.expo/
+*.log
+index.backup.html
+index.html.old
+fix-anki.js

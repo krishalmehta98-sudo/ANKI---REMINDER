@@ -4,3 +4,4 @@ node_modules/
 index.backup.html
 index.html.old
 fix-anki.js
+.DS_Store

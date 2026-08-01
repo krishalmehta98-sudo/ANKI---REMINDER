@@ -1194,14 +1194,22 @@ function requireKey(){
   S.screen='settings'; render();
   return false;
 }
-const AI_URL='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
-async function aiCall(parts,mode){
-  const body=JSON.stringify({contents:[{parts}]});
-  const url = mode==='query' ? AI_URL+'?key='+encodeURIComponent(D.aiKey) : AI_URL;
-  const headers = mode==='query'
+const AI_BASE='https://generativelanguage.googleapis.com/v1beta';
+const AI_MODELS=['gemini-2.5-flash','gemini-2.0-flash','gemini-flash-latest','gemini-2.0-flash-001'];
+function aiModel(){ return D.aiModel || AI_MODELS[0] }
+function aiHeaders(key,mode){
+  return mode==='query'
     ? {'Content-Type':'application/json'}
-    : {'Content-Type':'application/json','x-goog-api-key':D.aiKey};
-  const r=await fetch(url,{method:'POST',headers,body});
+    : {'Content-Type':'application/json','x-goog-api-key':key};
+}
+function aiUrl(model,key,mode){
+  const u=AI_BASE+'/models/'+model+':generateContent';
+  return mode==='query' ? u+'?key='+encodeURIComponent(key) : u;
+}
+async function aiCall(parts,mode,model){
+  const r=await fetch(aiUrl(model||aiModel(),D.aiKey,mode),
+    {method:'POST',headers:aiHeaders(D.aiKey,mode),
+     body:JSON.stringify({contents:[{parts}]})});
   return r.json();
 }
 async function aiParts(parts){
@@ -1209,17 +1217,23 @@ async function aiParts(parts){
   if(!key) throw new Error('Add your Gemini API key in Settings first.');
   if(location.protocol==='file:')
     throw new Error('AI does not work when the file is opened directly. Open the app from its web address instead.');
-  let d;
-  try{ d=await aiCall(parts,'header'); }
-  catch(e){ throw new Error('Network problem reaching Gemini. Check your connection.') }
-  if(d && d.error && /credential|API key|UNAUTHENT|permission/i.test(d.error.message||'')){
-    try{ d=await aiCall(parts,'query'); }catch(e){}
+  const tries=[aiModel(),...AI_MODELS.filter(m=>m!==aiModel())];
+  let d=null;
+  for(const m of tries){
+    try{ d=await aiCall(parts,'header',m); }
+    catch(e){ throw new Error('Network problem reaching Gemini. Check your connection.') }
+    if(d && d.error && /credential|API key|UNAUTHENT|permission/i.test(d.error.message||'')){
+      try{ d=await aiCall(parts,'query',m); }catch(e){}
+    }
+    if(!(d&&d.error)){ if(D.aiModel!==m){ D.aiModel=m; persist() } break }
+    if(!/quota|RESOURCE_EXHAUSTED|not found|NOT_FOUND|unsupported/i.test(d.error.message||'')) break;
   }
   if(d && d.error){
     const m=d.error.message||'Unknown error';
     if(/credential|API key|UNAUTHENT/i.test(m))
       throw new Error('That key was rejected. Open Settings and use "Test AI key" to check it.');
-    if(/quota|RESOURCE_EXHAUSTED/i.test(m)) throw new Error('Gemini quota reached. Try again later.');
+    if(/quota|RESOURCE_EXHAUSTED/i.test(m))
+      throw new Error('Every model reported no quota. Run "Test AI key" in Settings — it lists what your key can use.');
     throw new Error(m);
   }
   const txt=(d&&d.candidates&&d.candidates[0]&&d.candidates[0].content&&
@@ -1233,11 +1247,43 @@ async function testKey(){
   if(location.protocol==='file:')
     return alert('You have opened index.html directly from your disk.\n\nAI, the camera and offline mode only work when the app is loaded from its web address. Open the live link instead.');
   S.busy='Testing key…'; render();
+  const out=['Key: '+key.slice(0,4)+'…'+key.slice(-4)+'  ('+key.length+' chars)',''];
+
+  /* what can this key actually see? */
+  let usable=[];
   try{
-    const out=await aiParts([{text:'Reply with the single word: ok'}]);
-    alert(out ? 'Key works. AI features are ready.' : 'Key was accepted but returned nothing.');
-  }catch(e){ alert('Key test failed.\n\n'+e.message); }
+    const r=await fetch(AI_BASE+'/models',{headers:{'x-goog-api-key':key}});
+    const d=await r.json().catch(()=>({}));
+    if(d.error){ out.push('Model list: HTTP '+r.status+' — '+(d.error.status||'')+' '+(d.error.message||'')) }
+    else{
+      usable=(d.models||[])
+        .filter(x=>(x.supportedGenerationMethods||[]).includes('generateContent'))
+        .map(x=>(x.name||'').replace('models/',''));
+      const flash=usable.filter(n=>/flash/.test(n)&&!/thinking|image|tts|live/.test(n)).slice(0,8);
+      out.push('Models available: '+usable.length);
+      if(flash.length) out.push('Flash models: '+flash.join(', '));
+    }
+  }catch(e){ out.push('Model list failed: '+(e.message||'network')) }
+  out.push('');
+
+  /* try a real generation on each candidate */
+  const cands=[...new Set([...AI_MODELS,...usable.filter(n=>/flash/.test(n)).slice(0,4)])];
+  let win=null;
+  for(const model of cands){
+    try{
+      const r=await fetch(aiUrl(model,key,'header'),{method:'POST',headers:aiHeaders(key,'header'),
+        body:JSON.stringify({contents:[{parts:[{text:'say ok'}]}]})});
+      const d=await r.json().catch(()=>({}));
+      if(r.ok&&!d.error){ out.push(model+': WORKS'); win=model; break }
+      out.push(model+': '+((d.error&&d.error.status)||('HTTP '+r.status))+' — '+((d.error&&d.error.message)||'').slice(0,110));
+    }catch(e){ out.push(model+': blocked — '+(e.message||'network')) }
+  }
+  if(win){ D.aiModel=win; persist() }
   S.busy=''; render();
+  if(win) return alert('Key works.\n\nUsing model: '+win+'\n\nAI features are ready.');
+  out.push('','If every line says RESOURCE_EXHAUSTED, the key is valid but the project has no free quota.',
+             'Open aistudio.google.com -> Rate Limit to check, or make a key in a brand-new project.');
+  alert('Key test failed.\n\n'+out.join('\n'));
 }
 const ai=prompt=>aiParts([{text:prompt}]);
 
@@ -1706,7 +1752,10 @@ function drawSettings(){
     <div class="task"><div class="ttime">One key powers all of it: transcribing your recordings, turning them into
       notes or tasks, and the ✨ Enhance button that rewrites anything you've typed. Get a key at
       aistudio.google.com → API keys. It stays on this device.</div></div>
-    <div class="field" style="margin-top:11px"><input id="aiKey" value="${esc(D.aiKey)}" placeholder="Paste your Gemini API key"></div>
+    <div class="field" style="margin-top:11px"><input id="aiKey" type="password" value="${esc(D.aiKey)}" placeholder="Paste your Gemini API key">
+      <label class="hint" style="text-align:left;display:block;margin-top:6px">
+        <input type="checkbox" onclick="document.getElementById('aiKey').type=this.checked?'text':'password'"> show key
+      </label></div>
     <button class="btn wide" onclick="D.aiKey=document.getElementById('aiKey').value.trim();render();toast('Key saved')">Save key</button>
     <button class="btn wide" style="margin-top:7px" onclick="testKey()">Test AI key</button>
     ${location.protocol==='file:'?`<div class="hint" style="text-align:left;color:#e0a05a">You opened this file directly from your disk. AI, camera and offline mode need the app to be loaded from its web address.</div>`:''}

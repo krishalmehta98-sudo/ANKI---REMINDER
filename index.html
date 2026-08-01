@@ -113,6 +113,22 @@ main{flex:1;padding:18px 22px 120px}
 .tb.w{width:auto;padding:0 8px;font-size:12px;font-weight:700}
 
 /* forms */
+.nokey{background:var(--card2);border:1px dashed var(--line);border-radius:11px;padding:11px 13px;
+  margin-bottom:12px;font-size:12.5px;color:var(--muted);display:flex;align-items:center;
+  justify-content:space-between;gap:10px;flex-wrap:wrap}
+.remcard{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:13px;margin-bottom:10px}
+.remhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+.remno{font-size:11px;font-weight:800;letter-spacing:.6px;color:var(--muted)}
+.remx{background:none;border:none;color:var(--muted);font-size:15px;cursor:pointer;padding:2px 5px;line-height:1}
+.remx:hover{color:#e06a6a}
+.remlbl{font-size:10.5px;font-weight:800;letter-spacing:.6px;color:var(--muted);margin:9px 0 6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:7px 11px;border-radius:9px;border:1px solid var(--line);background:var(--card2);
+  color:var(--text);font-size:12.5px;font-weight:600;cursor:pointer}
+.chip:hover{border-color:var(--accent)}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#08131a}
+.remfire{margin-top:10px;font-size:12px;color:var(--muted)}
+.remfire b{color:var(--accent)}
 .field{margin-bottom:11px}
 .dowpick{display:flex;gap:6px;margin:0 0 11px}
 .dowchip{flex:1;padding:10px 0;border-radius:10px;border:1px solid var(--line);
@@ -217,7 +233,9 @@ nav button.on{color:var(--accent)}
 const KEY='anki-reminder-v2';
 function load(){ try{ const r=localStorage.getItem(KEY); if(r) return JSON.parse(r); }catch(e){} return null; }
 function persist(){
-  try{ localStorage.setItem(KEY,JSON.stringify(D)); }catch(e){ toast('Storage full — remove some images'); }
+  pushSchedule();
+  try{ localStorage.setItem(KEY,JSON.stringify(D)); S.storageWarned=false; }
+  catch(e){ if(!S.storageWarned){ S.storageWarned=true; toast('Storage full — remove some images or shorten a repeat') } }
   if(typeof fbPush==='function') fbPush();
 }
 
@@ -261,6 +279,52 @@ const THEMES={
   rose:{accent:'#C484A0',bg:'#F9F7F4',card:'#FFFFFF',card2:'#F1EEE9',line:'#E3DED6',text:'#22201E',muted:'#8A8378',label:'Muted Rose'}
 };
 const MOODS={energized:'🔋 Energized',neutral:'😐 Neutral',overwhelmed:'😰 Overwhelmed',moody:'😔 Moody'};
+
+function normalizeData(d){
+  if(!d||typeof d!=='object'||Array.isArray(d)) throw new Error('bad shape');
+  const arr=v=>Array.isArray(v)?v:[];
+  d.tasks=arr(d.tasks); d.notes=arr(d.notes); d.chat=arr(d.chat);
+  d.voice=arr(d.voice); d.scans=arr(d.scans); d.members=arr(d.members);
+  d.theme=THEMES[d.theme]?d.theme:'teal';
+  d.mood=MOODS[d.mood]?d.mood:'energized';
+  d.aiKey=typeof d.aiKey==='string'?d.aiKey:'';
+  d.me=typeof d.me==='string'?d.me:'';
+  d.fbCfg=typeof d.fbCfg==='string'?d.fbCfg:'';
+  d.group=d.group||null; d.role=d.role||'owner';
+  d.reminders=!!d.reminders; d.alarmSound=d.alarmSound!==false;
+  d.snoozeMin=+d.snoozeMin>0?+d.snoozeMin:10;
+  d.defRem=arr(d.defRem).length?d.defRem:[{off:0,type:'both'}];
+  d.tasks=d.tasks.filter(t=>t&&typeof t==='object');
+  d.notes=d.notes.filter(n=>n&&typeof n==='object');
+  let max=0;
+  const bump=x=>{ const n=+x; if(isFinite(n)&&n>max) max=n };
+  d.tasks.forEach(t=>{
+    bump(t.id);
+    t.title=typeof t.title==='string'?t.title:'Untitled';
+    t.date=/^\d{4}-\d{2}-\d{2}$/.test(t.date)?t.date:T_ISO;
+    t.time=/^\d{2}:\d{2}$/.test(t.time)?t.time:'09:00';
+    t.status=['open','progress','done'].includes(t.status)?t.status:'open';
+    t.priority=['low','med','high'].includes(t.priority)?t.priority:'low';
+    t.html=typeof t.html==='string'?t.html:'';
+    t.comments=arr(t.comments); t.noteIds=arr(t.noteIds);
+    t.reminders=arr(t.reminders).filter(r=>r&&typeof r==='object');
+    t.reminders.forEach(r=>{ bump(r.id); r.off=+r.off||0;
+      r.type=['both','alarm','push','silent'].includes(r.type)?r.type:'both'; });
+    t.repeat=['off','daily','weekdays','week','month','custom','dates'].includes(t.repeat)?t.repeat:'off';
+    t.repeatDays=arr(t.repeatDays).map(Number).filter(n=>n>=0&&n<=6);
+    t.repeatDates=arr(t.repeatDates).map(Number).filter(n=>n>=1&&n<=31);
+    t.repeatUntil=/^\d{4}-\d{2}-\d{2}$/.test(t.repeatUntil)?t.repeatUntil:null;
+    t.skip=arr(t.skip).filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(x));
+  });
+  d.notes.forEach(n=>{ bump(n.id); n.title=typeof n.title==='string'?n.title:'Note';
+    n.html=typeof n.html==='string'?n.html:''; n.tags=arr(n.tags); });
+  const ids=new Set();
+  d.tasks.forEach(t=>{ if(!isFinite(+t.id)||ids.has(t.id)) t.id=++max; ids.add(t.id) });
+  if(!isFinite(+d.seq)||+d.seq<max) d.seq=max+1;
+  return d;
+}
+
+try{ normalizeData(D) }catch(e){ D=normalizeData(JSON.parse(JSON.stringify(SEED))) }
 const STATUS=[['open','OPEN'],['progress','IN PROGRESS'],['done','DONE']];
 
 let S={screen:'home',month:new Date(TODAY.getFullYear(),TODAY.getMonth(),1),date:T_ISO,homeFilter:'today',showDone:true,
@@ -314,6 +378,7 @@ const REPEAT_HORIZON=60;
 const REPEAT_MAX_PER_SEED=250;
 function repeatDueOn(t,day){
   if(!t.repeat||t.repeat==='off') return false;
+  if(t.skip&&t.skip.includes(day)) return false;
   if(t.repeatUntil&&day>t.repeatUntil) return false;
   if(day<=t.date) return false;
   const start=new Date(t.date+'T00:00:00'), on=new Date(day+'T00:00:00');
@@ -322,14 +387,17 @@ function repeatDueOn(t,day){
   if(t.repeat==='daily') return true;
   if(t.repeat==='weekdays') return dow>0&&dow<6;
   if(t.repeat==='week') return days%7===0;
-  if(t.repeat==='month') return dom===start.getDate();
+  if(t.repeat==='month'){
+    const want=start.getDate(), dim=new Date(on.getFullYear(),on.getMonth()+1,0).getDate();
+    return dom===Math.min(want,dim);
+  }
   if(t.repeat==='custom') return (t.repeatDays||[]).includes(dow);
   if(t.repeat==='dates') return (t.repeatDates||[]).includes(dom);
   return false;
 }
 function repeatDueToday(t){ return repeatDueOn(t,T_ISO) }
 function seedCopy(seed,day){
-  return {...seed,id:nid(),date:day,status:'open',repeatOf:seed.id,carryFrom:null,
+  return {...seed,id:nid(),date:day,status:'open',repeatOf:seed.id,carryFrom:null,skip:[],
     comments:[],
     repeatDays:(seed.repeatDays||[]).slice(),
     repeatDates:(seed.repeatDates||[]).slice(),
@@ -337,23 +405,35 @@ function seedCopy(seed,day){
     reminders:(seed.reminders||[]).map(r=>({...r,id:nid(),snoozeAt:null}))};
 }
 function materializeRepeats(){
-  const seeds=D.tasks.filter(t=>t.repeat&&t.repeat!=='off'&&!t.repeatOf);
-  const seedIds=new Set(seeds.map(s=>s.id));
-  D.tasks=D.tasks.filter(x=>!x.repeatOf||seedIds.has(x.repeatOf));
-  seeds.forEach(seed=>{
-    const cap=seed.repeatUntil?shiftDay(T_ISO,365):shiftDay(T_ISO,REPEAT_HORIZON);
-    const last=seed.repeatUntil&&seed.repeatUntil<cap?seed.repeatUntil:cap;
-    D.tasks=D.tasks.filter(x=>!(x.repeatOf===seed.id&&(x.date>last||!repeatDueOn(seed,x.date))));
-    const have=new Set(D.tasks.filter(x=>x.repeatOf===seed.id).map(x=>x.date));
+  const seeds=[], byId={};
+  for(const t of D.tasks){ if(t.repeat&&t.repeat!=='off'&&!t.repeatOf){ seeds.push(t); byId[t.id]=t } }
+  const lastFor={};
+  for(const s of seeds){
+    const cap=shiftDay(T_ISO, s.repeatUntil?365:REPEAT_HORIZON);
+    lastFor[s.id]=(s.repeatUntil&&s.repeatUntil<cap)?s.repeatUntil:cap;
+  }
+  const have={};
+  const kept=[];
+  for(const t of D.tasks){
+    if(!t.repeatOf){ kept.push(t); continue }
+    const seed=byId[t.repeatOf];
+    if(!seed) continue;
+    if(t.date>lastFor[seed.id]||!repeatDueOn(seed,t.date)) continue;
+    (have[seed.id]||(have[seed.id]={}))[t.date]=1;
+    kept.push(t);
+  }
+  if(kept.length!==D.tasks.length) D.tasks=kept;
+  for(const s of seeds){
+    const seen=have[s.id]||{}, last=lastFor[s.id];
     let made=0, day=T_ISO;
     while(day<=last&&made<REPEAT_MAX_PER_SEED){
-      if(!have.has(day)&&repeatDueOn(seed,day)){ D.tasks.push(seedCopy(seed,day)); made++ }
+      if(!seen[day]&&repeatDueOn(s,day)){ D.tasks.push(seedCopy(s,day)); made++ }
       day=shiftDay(day,1);
     }
-  });
+  }
 }
-function expandRepeatingAndCarryForward(){
-  materializeRepeats();
+function expandRepeatingAndCarryForward(){ materializeRepeats(); carryForward() }
+function carryForward(){
   const y=shiftDay(T_ISO,-1);
   D.tasks.filter(t=>t.date===y&&t.status!=='done').forEach(t=>{
     if(t.repeat&&t.repeat!=='off') return;
@@ -365,9 +445,11 @@ function expandRepeatingAndCarryForward(){
 
 /* ============ render ============ */
 function render(save){
-  if(save!==false) { 
-    if(S.expandedFor!==T_ISO) { expandRepeatingAndCarryForward(); S.expandedFor=T_ISO }
-    persist() 
+  captureDraft();
+  if(save!==false) {
+    if(S.expandedFor!==T_ISO) { carryForward(); S.expandedFor=T_ISO }
+    materializeRepeats();
+    persist()
   }
   const t=THEMES[D.theme]||THEMES.teal, r=document.documentElement.style;
   ['accent','bg','card','card2','line','text','muted'].forEach(k=>r.setProperty('--'+k,t[k]));
@@ -595,10 +677,9 @@ function localPlan(text){
 function approve(edit){
   const p=S.pending; let last=null;
   p.tasks.forEach(t=>{
-    last={id:nid(),date:t.date,title:t.title,time:t.time,status:'open',priority:t.priority,
-      html:t.notes?`<p>${esc(t.notes)}</p>`:'',comments:[],noteIds:[],
-      reminders:JSON.parse(JSON.stringify(D.defRem)).map(r=>({...r,id:nid()})),
-      repeat:t.repeat||'off',repeatDays:t.repeatDays||[],repeatDates:t.repeatDates||[],repeatUntil:t.repeatUntil||null};
+    last=newTask({date:t.date,title:t.title,time:t.time,priority:t.priority,
+      html:t.notes?`<p>${esc(t.notes)}</p>`:'',
+      repeat:t.repeat||'off',repeatDays:t.repeatDays||[],repeatDates:t.repeatDates||[],repeatUntil:t.repeatUntil||null});
     D.tasks.push(last);
   });
   (p.notes||[]).forEach(n=>D.notes.unshift({id:nid(),title:n.title||'Note',html:`<p>${esc(n.body||'')}</p>`,
@@ -614,6 +695,56 @@ const OFFS=[[0,'At the time'],[5,'5 min before'],[10,'10 min before'],[15,'15 mi
   [60,'1 hour before'],[120,'2 hours before'],[1440,'1 day before']];
 const RTYPES=[['both','🔔 Alarm + push'],['alarm','🔊 Alarm only'],['push','📱 Push only'],['silent','🔕 Silent banner']];
 const offLabel=o=>(OFFS.find(x=>x[0]===+o)||[0,o+' min before'])[1];
+/* ---- native alarm bridge ---- */
+const NATIVE = () => typeof window!=='undefined' && !!window.ReactNativeWebView;
+const SCHED_MAX = 400;
+function upcomingReminders(limit){
+  const out=[], now=Date.now(), cap=limit||SCHED_MAX;
+  for(const t of D.tasks){
+    if(t.status==='done') continue;
+    if(!Array.isArray(t.reminders)) continue;
+    const base=Date.parse((t.date||'')+'T'+(t.time||'09:00'));
+    if(!isFinite(base)) continue;
+    for(const r of t.reminders){
+      if(!r||r.type==='silent') continue;
+      const at=r.snoozeAt||(base-(+r.off||0)*60000);
+      if(!isFinite(at)||at<=now) continue;
+      out.push({
+        key:String(t.id)+'_'+String(r.id),
+        at,
+        taskId:t.id,
+        title:t.title||'Reminder',
+        body:offLabel(+r.off||0)+' · '+fmtTime(t.time||'09:00'),
+        loud:r.type==='both'||r.type==='alarm'
+      });
+    }
+  }
+  out.sort((a,b)=>a.at-b.at);
+  return out.slice(0,cap);
+}
+let _schedTimer=null, _schedLast='';
+function pushSchedule(){
+  if(!NATIVE()) return;
+  clearTimeout(_schedTimer);
+  _schedTimer=setTimeout(()=>{
+    try{
+      const items=upcomingReminders();
+      const sig=JSON.stringify(items.map(i=>i.key+'@'+i.at));
+      if(sig===_schedLast) return;
+      _schedLast=sig;
+      window.ReactNativeWebView.postMessage(JSON.stringify({type:'schedule',items}));
+    }catch(e){}
+  },800);
+}
+function onNativeMessage(raw){
+  let m; try{ m=JSON.parse(raw) }catch(e){ return }
+  if(m.type==='open-task'&&m.taskId!=null){
+    const t=task(m.taskId);
+    if(t){ S.screen='review'; S.date=t.date; S.revTab=t.status; S.editTask=t.id; render() }
+  }
+  if(m.type==='resend'){ _schedLast=''; pushSchedule() }
+}
+
 const remDue=(t,r)=>r.snoozeAt||(Date.parse(t.date+'T'+(t.time||'09:00'))-r.off*60000);
 function checkReminders(){
   if(!D.reminders||S.alarm) return;
@@ -735,7 +866,7 @@ function drawReview(){
       <button class="btn" onclick="go('calendar')">📅 Calendar</button>
     </div>
     ${tabsHTML('revTab',S.revTab,S.date)}
-    ${S.addingTask?taskForm(null):`<button class="btn primary wide" onclick="S.addingTask=true;S.editTask=null;S.formRem=null;render()">+ Add task${canEdit()?'':' (private to me)'}</button>`}
+    ${S.addingTask?taskForm(null):`<button class="btn primary wide" onclick="S.addingTask=true;S.editTask=null;S.formRem=null;clearDraft();render()">+ Add task${canEdit()?'':' (private to me)'}</button>`}
     ${list.length?list.map(t=>S.editTask===t.id?taskForm(t):taskCard(t,true)).join('')
       :'<div class="empty">Nothing in this list. Add a task above.</div>'}`;
 }
@@ -789,8 +920,38 @@ function taskCard(t,full){
 }
 function toggleTask(id){S.openIds.has(id)?S.openIds.delete(id):S.openIds.add(id);render(false)}
 
+function captureDraft(){
+  const el=id=>document.getElementById(id);
+  if(!el('fTitle')) return;
+  S.draft={
+    title:(el('fTitle')||{}).value||'',
+    time:(el('fTime')||{}).value||'',
+    date:(el('fDate')||{}).value||'',
+    status:(el('fStatus')||{}).value||'open',
+    priority:(el('fPriority')||{}).value||'low',
+    repeat:(el('fRepeat')||{}).value||'off',
+    repeatDays:readRepeatDays(),
+    repeatDates:readRepeatDates(),
+    repeatUntil:(el('fUntil')||{}).value||'',
+    html:(el('fHtml')||{}).innerHTML||'',
+    priv:!!(el('fPriv')&&el('fPriv').classList.contains('on'))
+  };
+}
+function clearDraft(){ S.draft=null }
+function draftOver(t){
+  const d=S.draft; if(!d) return t;
+  const base=t?{...t}:{id:null,title:'',time:'09:00',date:S.date,status:'open',priority:'low',
+    html:'',comments:[],noteIds:[],reminders:[],repeat:'off',repeatDays:[],repeatDates:[],repeatUntil:null,priv:false};
+  base.title=d.title; base.time=d.time||base.time; base.date=d.date||base.date;
+  base.status=d.status; base.priority=d.priority;
+  base.repeat=d.repeat; base.repeatDays=d.repeatDays; base.repeatDates=d.repeatDates;
+  base.repeatUntil=d.repeatUntil||null; base.html=d.html; base.priv=d.priv;
+  return base;
+}
+
 function taskForm(t){
   const isNew=!t;
+  const orig=t; t=draftOver(t);
   if(!S.formRem) S.formRem = t ? JSON.parse(JSON.stringify(t.reminders||[])) : JSON.parse(JSON.stringify(D.defRem)).map(r=>({...r,id:nid()}));
   return `<div class="task hi">
     <div class="field"><label>TASK</label><input id="fTitle" value="${t?esc(t.title):''}" placeholder="What needs doing?"></div>
@@ -836,7 +997,7 @@ function taskForm(t){
       <div class="rt" id="fHtml" contenteditable="true">${t?t.html:''}</div></div>
     <div class="acts">
       <button class="btn primary" onclick="saveTask(${isNew?'null':t.id})">${isNew?'Add task':'Save changes'}</button>
-      <button class="btn" onclick="S.addingTask=false;S.editTask=null;S.formRem=null;render()">Cancel</button>
+      <button class="btn" onclick="S.addingTask=false;S.editTask=null;S.formRem=null;clearDraft();render()">Cancel</button>
     </div>
   </div>`;
 }
@@ -862,7 +1023,16 @@ function repeatUI(v){
   show('fUntilWrap', v&&v!=='off');
 }
 function updateRepeatDays(){}
-function editTask(id){const t=task(id);S.date=t.date;S.revTab=t.status;S.screen='review';S.editTask=id;S.addingTask=false;S.formRem=null;render()}
+function editTask(id){const t=task(id);S.date=t.date;S.revTab=t.status;S.screen='review';S.editTask=id;S.addingTask=false;S.formRem=null;clearDraft();render()}
+function newTask(o){
+  return Object.assign({
+    id:nid(), date:S.date, title:'', time:'09:00', status:'open', priority:'low',
+    html:'', comments:[], noteIds:[],
+    reminders:JSON.parse(JSON.stringify(D.defRem)).map(r=>({...r,id:nid(),snoozeAt:null,firedFor:null})),
+    repeat:'off', repeatDays:[], repeatDates:[], repeatUntil:null, skip:[],
+    priv:!canEdit(), by:D.me||''
+  }, o||{});
+}
 function saveTask(id){
   const title=$('#fTitle').value.trim(); if(!title){$('#fTitle').focus();return}
   const o={title,time:$('#fTime').value,date:$('#fDate').value,status:$('#fStatus').value,
@@ -874,12 +1044,28 @@ function saveTask(id){
     repeatDays:readRepeatDays(),
     repeatDates:readRepeatDates(),
     repeatUntil:($('#fUntil')&&$('#fUntil').value)||null};
-  if(id===null) D.tasks.push({id:nid(),comments:[],noteIds:[],...o});
+  if(id===null) D.tasks.push(newTask(o));
   else Object.assign(task(id),o);
-  S.date=o.date;S.revTab=o.status;S.addingTask=false;S.editTask=null;S.formRem=null;render();toast(id===null?'Task added':'Saved');
+  S.date=o.date;S.revTab=o.status;S.addingTask=false;S.editTask=null;S.formRem=null;clearDraft();render();toast(id===null?'Task added':'Saved');
 }
 function setStatus(id,st){task(id).status=st;if(S.screen==='review')S.revTab=st;render();toast('Moved to '+st)}
-function delTask(id){if(confirm('Delete "'+task(id).title+'"?')){D.tasks=D.tasks.filter(t=>t.id!==id);render();toast('Deleted')}}
+function delTask(id){
+  const t=task(id); if(!t) return;
+  if(t.repeatOf){
+    if(!confirm('Delete just this one occurrence of "'+t.title+'"?')) return;
+    const seed=D.tasks.find(x=>x.id===t.repeatOf);
+    if(seed) seed.skip=(seed.skip||[]).concat(t.date);
+    D.tasks=D.tasks.filter(x=>x.id!==id);
+  } else if(t.repeat&&t.repeat!=='off'){
+    if(!confirm('Delete "'+t.title+'" and all of its repeats?')) return;
+    D.tasks=D.tasks.filter(x=>x.id!==id&&x.repeatOf!==id);
+  } else {
+    if(!confirm('Delete "'+t.title+'"?')) return;
+    D.tasks=D.tasks.filter(x=>x.id!==id);
+  }
+  D.notes.forEach(n=>{ if(n.taskId===id) n.taskId=null });
+  render(); toast('Deleted');
+}
 function addComment(id){const el=$('#cm'+id),v=el.value.trim();if(!v)return;
   task(id).comments.push({id:nid(),text:v,at:Date.now()});S.openIds.add(id);render();}
 function delComment(tid,cid){const t=task(tid);t.comments=t.comments.filter(c=>c.id!==cid);render()}
@@ -920,6 +1106,8 @@ function drawVoice(){
       <button class="btn" onclick="uploadAudio()" style="flex:1">📁 Upload audio</button>
     </div>
     ${S.busy?`<div class="busy">${S.busy}</div>`:''}
+    ${!D.aiKey?`<div class="nokey">AI features need a Gemini key.
+      <button class="btn sm" onclick="S.screen='settings';render()">Add it in Settings</button></div>`:''}
     ${D.voice.length?D.voice.map(v=>`
       <div class="task">
         <div class="ttitle">${esc(v.text||'Voice note')}</div>
@@ -975,16 +1163,23 @@ function uploadAudio(){
 }
 function typeVoice(){const t=prompt('Reminder / note');if(!t)return;
   D.voice.unshift({id:nid(),text:t.slice(0,60),transcript:t,audio:null,ai:'',at:Date.now()});render()}
-function voiceToTask(id){const v=D.voice.find(x=>x.id===id);
-  D.tasks.push({id:nid(),date:S.date,title:(v.transcript||v.text).slice(0,60),time:'09:00',status:'open',
-    priority:'low',html:`<p>${esc(v.transcript||v.text)}</p>`,comments:[],noteIds:[]});
-  S.screen='review';S.revTab='open';render();toast('Task created — edit it here')}
-function voiceToNote(id){const v=D.voice.find(x=>x.id===id);
+function voiceToTask(id){const v=D.voice.find(x=>x.id===id); if(!v) return;
+  const nt=newTask({title:(v.transcript||v.text).slice(0,60),html:`<p>${esc(v.transcript||v.text)}</p>`});
+  D.tasks.push(nt);
+  S.screen='review';S.revTab='open';S.editTask=nt.id;S.addingTask=false;S.formRem=null;clearDraft();
+  render();toast('Task created — edit it here')}
+function voiceToNote(id){const v=D.voice.find(x=>x.id===id); if(!v) return;
   const n={id:nid(),title:v.text||'Voice note',html:v.ai||`<p>${esc(v.transcript||'')}</p>`,tags:['voice'],
     taskId:null,pinned:false,at:Date.now(),updated:Date.now()};
   D.notes.unshift(n);S.screen='notes';S.noteEdit=n.id;render();toast('Saved as note')}
 
 /* ---- AI ---- */
+function requireKey(){
+  if(D.aiKey) return true;
+  toast('Add your Gemini key in Settings to use AI');
+  S.screen='settings'; render();
+  return false;
+}
 async function aiParts(parts){
   if(!D.aiKey) throw new Error('Add your Gemini API key in Settings first.');
   const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${D.aiKey}`,
@@ -998,8 +1193,9 @@ const ai=prompt=>aiParts([{text:prompt}]);
 
 /* send the recording itself to Gemini and get words back */
 async function transcribe(id){
-  const v=D.voice.find(x=>x.id===id);
+  const v=D.voice.find(x=>x.id===id); if(!v) return;
   if(!v.audio) return toast('No audio on this one');
+  if(!requireKey()) return;
   S.busy='Transcribing…';render();
   try{
     const mime=(v.audio.match(/^data:([^;]+);/)||[])[1]||'audio/webm';
@@ -1019,6 +1215,7 @@ async function enhance(target){
   if(!el) return;
   const text=(el.innerText||'').trim();
   if(!text) return toast('Nothing to enhance');
+  if(!requireKey()) return;
   S.busy='Rewriting…'; render();
   try{
     const out=await ai(`Improve this writing: fix grammar and spelling, tighten it, keep the meaning and the writer's voice. Return simple HTML only.\n\n${text}`);
@@ -1029,7 +1226,7 @@ async function enhance(target){
       const live=document.getElementById(target); if(live) live.innerHTML=clean;
       persist();
     }
-  }catch(e){ alert('AI error: '+e.message) }
+  }catch(e){ toast('AI: '+e.message) }
   S.busy=''; render(false);
   const el3=document.getElementById(target); if(el3) el3.focus();
 }
@@ -1039,12 +1236,13 @@ const AI_PROMPTS={
   tasks:t=>`Extract action items as an HTML checklist (<ul><li>). Nothing else:\n\n${t}`
 };
 async function voiceAI(id,mode){
-  const v=D.voice.find(x=>x.id===id);
+  const v=D.voice.find(x=>x.id===id); if(!v) return;
+  if(!requireKey()) return;
   const src=v.transcript||v.text;
   if(!src) return toast('Nothing to work with');
   S.busy='Thinking…';render();
   try{ v.ai=await ai(AI_PROMPTS[mode](src)); }
-  catch(e){ alert('AI error: '+e.message) }
+  catch(e){ toast('AI: '+e.message) }
   S.busy='';render();
 }
 
@@ -1096,12 +1294,12 @@ function toggleScan(id){
   };
   img.src=s.src;
 }
-function scanToTask(id){const s=D.scans.find(x=>x.id===id);
-  D.tasks.push({id:nid(),date:S.date,title:'Review '+s.name,time:'09:00',status:'open',priority:'low',
-    html:`<img src="${s.scan||s.src}">${s.notes?`<p>${esc(s.notes)}</p>`:''}`,comments:[],noteIds:[]});
-  const t=D.tasks[D.tasks.length-1];
+function scanToTask(id){const s=D.scans.find(x=>x.id===id); if(!s) return;
+  const t=newTask({title:'Review '+s.name,
+    html:`<img src="${s.scan||s.src}">${s.notes?`<p>${esc(s.notes)}</p>`:''}`});
+  D.tasks.push(t);
   S.screen='review';S.revTab='open';S.editTask=t.id;render();toast('Edit and save')}
-function scanToNote(id){const s=D.scans.find(x=>x.id===id);
+function scanToNote(id){const s=D.scans.find(x=>x.id===id); if(!s) return;
   const n={id:nid(),title:s.name,html:`<img src="${s.scan||s.src}">${s.notes?`<p>${esc(s.notes)}</p>`:''}`,
     tags:['scan'],taskId:null,pinned:false,at:Date.now(),updated:Date.now()};
   D.notes.unshift(n);S.screen='notes';S.noteEdit=n.id;render()}
@@ -1203,26 +1401,45 @@ function doLink(tid,nid_){
   note(nid_).taskId=tid;
   closeModal();S.openIds.add(tid);render();toast('Linked');
 }
-function remList(tid){ return tid?task(tid).reminders:S.formRem }
+function remList(tid){
+  if(tid){ const t=task(tid); if(!t) return []; if(!Array.isArray(t.reminders)) t.reminders=[]; return t.reminders }
+  if(S.remFor===null&&S.screen==='settings'){ if(!Array.isArray(D.defRem)) D.defRem=[]; return D.defRem }
+  if(!Array.isArray(S.formRem)) S.formRem=[];
+  return S.formRem;
+}
 function remModal(tid){
   S.remFor=tid===undefined?null:tid;
-  if(S.remFor===null&&S.screen==='settings') S.formRem=D.defRem;
   drawRemModal(); $('#mask').classList.add('on');
 }
 function drawRemModal(){
   const tid=S.remFor, list=remList(tid);
-  $('#modal').innerHTML=`<h3>⏰ Set reminders${tid?' — '+esc(task(tid).title):''}</h3>
+  const tk=tid?task(tid):null;
+  if(tid&&!tk){ closeModal(); S.remFor=null; return }
+  const timeOf=()=>{ const el=document.getElementById('fTime');
+    if(tk) return tk.time; return (el&&el.value)||'09:00' };
+  const fires=off=>{
+    const [h,m]=timeOf().split(':').map(Number);
+    const d=new Date(2000,0,2,h,m-off);
+    let hh=d.getHours(), mm=String(d.getMinutes()).padStart(2,'0');
+    const ap=hh>=12?'PM':'AM'; hh=hh%12||12;
+    const prev=d.getDate()<2?' (prev day)':'';
+    return hh+':'+mm+' '+ap+prev;
+  };
+  $('#modal').innerHTML=`<h3>⏰ Reminders${tk?' — '+esc(tk.title):''}</h3>
     ${list.length?list.map((r,i)=>`
-      <div class="prop" style="border-style:solid;margin-bottom:9px">
-        <div class="sect" style="margin:0 0 7px">REMINDER ${i+1}</div>
-        <div class="field"><label>WHEN</label>
-          <select onchange="setRem(${i},'off',this.value)">${OFFS.map(([o,l])=>
-            `<option value="${o}" ${+r.off===o?'selected':''}>${l}</option>`).join('')}</select></div>
-        <div class="field"><label>TYPE</label>
-          <select onchange="setRem(${i},'type',this.value)">${RTYPES.map(([k,l])=>
-            `<option value="${k}" ${r.type===k?'selected':''}>${l}</option>`).join('')}</select></div>
-        <button class="btn sm danger" onclick="dropRem(${i})">Remove</button>
-      </div>`).join(''):'<div class="empty">No reminders on this task.</div>'}
+      <div class="remcard">
+        <div class="remhead">
+          <span class="remno">Reminder ${i+1}</span>
+          <button class="remx" onclick="dropRem(${i})" title="Remove">✕</button>
+        </div>
+        <div class="remlbl">WHEN</div>
+        <div class="chips">${OFFS.map(([o,l])=>
+          `<button type="button" class="chip ${+r.off===o?'on':''}" onclick="setRem(${i},'off',${o})">${l}</button>`).join('')}</div>
+        <div class="remlbl">HOW</div>
+        <div class="chips">${RTYPES.map(([k,l])=>
+          `<button type="button" class="chip ${r.type===k?'on':''}" onclick="setRem(${i},'type','${k}')">${l}</button>`).join('')}</div>
+        <div class="remfire">Fires at <b>${fires(+r.off)}</b></div>
+      </div>`).join(''):'<div class="empty">No reminders yet — add one below.</div>'}
     <div class="acts">
       <button class="btn" onclick="addRem()">+ Add reminder</button>
       <button class="btn primary" onclick="closeRem()">Done</button>
@@ -1233,7 +1450,6 @@ function setRem(i,k,v){ const r=remList(S.remFor)[i]; r[k]=k==='off'?+v:v; r.fir
 function dropRem(i){ remList(S.remFor).splice(i,1); drawRemModal() }
 function closeRem(){
   closeModal();
-  if(S.remFor===null&&S.screen==='settings'){ D.defRem=S.formRem; S.formRem=null }
   S.remFor=null; persist(); render();
 }
 function closeModal(){$('#mask').classList.remove('on')}
@@ -1444,7 +1660,11 @@ function exportData(){
 function importData(){
   const el=document.createElement('input');el.type='file';el.accept='.json';
   el.onchange=()=>{const r=new FileReader();
-    r.onload=()=>{try{D=JSON.parse(r.result);render();toast('Imported')}catch(e){alert('Bad file')}};
+    r.onload=()=>{try{
+      const incoming=normalizeData(JSON.parse(r.result));
+      if(!incoming.tasks.length&&!incoming.notes.length&&!confirm('That backup has no tasks or notes. Import anyway?')) return;
+      D=incoming; S.expandedFor=null; clearDraft(); render(); toast('Imported');
+    }catch(e){ alert("That file isn't a valid Anki Reminder backup — nothing was changed.") }};
     r.readAsText(el.files[0])};
   el.click();
 }
@@ -1456,6 +1676,9 @@ render();
 if(D.group&&D.fbCfg) fbStart().then(fbListen).catch(()=>{FB.status='Offline — will sync when back online';render(false)});
 
 /* installable app: cache the shell so it opens offline */
+window.__ankiNative=onNativeMessage;
+document.addEventListener('message',e=>onNativeMessage(e.data));
+window.addEventListener('message',e=>{ if(typeof e.data==='string') onNativeMessage(e.data) });
 if('serviceWorker' in navigator && location.protocol!=='file:')
   navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>

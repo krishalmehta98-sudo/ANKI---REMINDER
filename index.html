@@ -138,6 +138,24 @@ main{flex:1;padding:18px 22px 120px}
 .ck>input[type=checkbox]{margin:4px 0 0;width:16px;height:16px;flex:0 0 auto;accent-color:var(--accent);cursor:pointer}
 .ck>span{flex:1;min-width:0}
 .ck.done>span{opacity:.5;text-decoration:line-through}
+.ocr{background:var(--card2);border:1px solid var(--line);border-radius:11px;padding:11px 13px;margin-top:10px}
+.ocrHead{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  font-size:10px;font-weight:800;letter-spacing:.6px;color:var(--muted);margin-bottom:8px}
+.ocrBody{font-size:13px;line-height:1.55;max-height:260px;overflow:auto}
+.ocrBody table{width:100%;border-collapse:collapse;font-size:12px}
+.ocrBody td,.ocrBody th{border:1px solid var(--line);padding:4px 6px;text-align:left}
+.emojiBox{background:var(--card2);border:1px solid var(--line);border-radius:11px;
+  padding:9px 11px;margin:0 0 9px}
+.emojiGrp{font-size:10px;font-weight:800;letter-spacing:.6px;color:var(--muted);margin:7px 0 5px}
+.emojiGrp:first-child{margin-top:0}
+.emojiRow{display:flex;flex-wrap:wrap;gap:3px}
+.emj{background:none;border:none;font-size:20px;line-height:1;padding:5px;border-radius:8px;cursor:pointer}
+.emj:hover{background:var(--card)}
+.confetti{position:fixed;inset:0;pointer-events:none;z-index:200}
+.streak{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);
+  border-radius:13px;padding:11px 14px;margin-bottom:14px}
+.streak b{font-size:19px;color:var(--accent)}
+.streak span{font-size:12px;color:var(--muted)}
 .dowpick{display:flex;gap:6px;margin:0 0 11px}
 .dowchip{flex:1;padding:10px 0;border-radius:10px;border:1px solid var(--line);
   background:var(--card);color:var(--muted);font-size:13px;font-weight:700;cursor:pointer}
@@ -301,9 +319,14 @@ function normalizeData(d){
   d.group=d.group||null; d.role=d.role||'owner';
   d.reminders=!!d.reminders; d.alarmSound=d.alarmSound!==false;
   d.snoozeMin=+d.snoozeMin>0?+d.snoozeMin:10;
+  d.soundPack=['off','funny','retro','soft'].includes(d.soundPack)?d.soundPack:'soft';
+  d.confetti=d.confetti!==false;
+  d.doneDays=arr(d.doneDays).filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(x));
   d.defRem=arr(d.defRem).length?d.defRem:[{off:0,type:'both'}];
   d.tasks=d.tasks.filter(t=>t&&typeof t==='object');
   d.notes=d.notes.filter(n=>n&&typeof n==='object');
+  d.scans=d.scans.filter(x=>x&&typeof x==='object');
+  d.scans.forEach(x=>{ if(typeof x.text!=='string') x.text='' });
   let max=0;
   const bump=x=>{ const n=+x; if(isFinite(n)&&n>max) max=n };
   d.tasks.forEach(t=>{
@@ -451,6 +474,121 @@ function carryForward(){
   });
 }
 
+/* ============ sound packs ============ */
+const SOUND_PACKS={
+  off:'🔕 Off', funny:'🤪 Funny', retro:'🎮 Retro blips', soft:'🌙 Soft'
+};
+let _ac=null;
+function actx(){
+  try{ if(!_ac) _ac=new (window.AudioContext||window.webkitAudioContext)();
+       if(_ac.state==='suspended') _ac.resume();
+       return _ac; }catch(e){ return null }
+}
+function tone(freq,start,dur,type,vol){
+  const a=actx(); if(!a) return;
+  const o=a.createOscillator(), g=a.createGain();
+  o.type=type||'sine'; o.frequency.setValueAtTime(freq,a.currentTime+start);
+  g.gain.setValueAtTime(0.0001,a.currentTime+start);
+  g.gain.exponentialRampToValueAtTime(vol||0.18,a.currentTime+start+0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+start+dur);
+  o.connect(g); g.connect(a.destination);
+  o.start(a.currentTime+start); o.stop(a.currentTime+start+dur+0.02);
+}
+function slide(from,to,start,dur,type,vol){
+  const a=actx(); if(!a) return;
+  const o=a.createOscillator(), g=a.createGain();
+  o.type=type||'square';
+  o.frequency.setValueAtTime(from,a.currentTime+start);
+  o.frequency.exponentialRampToValueAtTime(Math.max(40,to),a.currentTime+start+dur);
+  g.gain.setValueAtTime(vol||0.14,a.currentTime+start);
+  g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+start+dur);
+  o.connect(g); g.connect(a.destination);
+  o.start(a.currentTime+start); o.stop(a.currentTime+start+dur+0.02);
+}
+function sfx(kind){
+  const pack=D.soundPack||'soft';
+  if(pack==='off') return;
+  if(pack==='retro'){
+    if(kind==='done')   { tone(880,0,.09,'square',.13); tone(1318,.08,.13,'square',.13) }
+    if(kind==='delete') { slide(500,120,0,.22,'square',.12) }
+    if(kind==='cleared'){ [523,659,784,1046].forEach((f,i)=>tone(f,i*.09,.14,'square',.13)) }
+  }
+  if(pack==='funny'){
+    if(kind==='done')   { slide(300,900,0,.16,'sawtooth',.11); tone(1200,.16,.1,'triangle',.1) }
+    if(kind==='delete') { slide(700,90,0,.34,'sawtooth',.12) }
+    if(kind==='cleared'){ [392,523,659,784,1046,1318].forEach((f,i)=>tone(f,i*.07,.13,'triangle',.12)) }
+  }
+  if(pack==='soft'){
+    if(kind==='done')   { tone(659,0,.16,'sine',.11); tone(988,.06,.22,'sine',.07) }
+    if(kind==='delete') { tone(320,0,.14,'sine',.08); tone(240,.07,.18,'sine',.06) }
+    if(kind==='cleared'){ [523,659,784].forEach((f,i)=>tone(f,i*.13,.4,'sine',.09)) }
+  }
+}
+
+/* ============ confetti ============ */
+function confetti(big){
+  if(D.confetti===false) return;
+  const cv=document.createElement('canvas');
+  cv.className='confetti';
+  cv.width=window.innerWidth; cv.height=window.innerHeight;
+  document.body.appendChild(cv);
+  const x=cv.getContext('2d');
+  const cols=['#4FC3DC','#7DB89F','#9B8DC7','#E07856','#D68A6F','#C484A0','#f5d76e'];
+  const n=big?150:70;
+  const bits=[];
+  for(let i=0;i<n;i++) bits.push({
+    x:cv.width*(.2+Math.random()*.6), y:cv.height*.42+Math.random()*40,
+    vx:(Math.random()-.5)*(big?15:11), vy:-(6+Math.random()*(big?13:9)),
+    s:5+Math.random()*7, r:Math.random()*6.28, vr:(Math.random()-.5)*.34,
+    c:cols[(Math.random()*cols.length)|0]
+  });
+  let frames=0;
+  (function step(){
+    frames++;
+    x.clearRect(0,0,cv.width,cv.height);
+    let live=0;
+    for(const b of bits){
+      b.vy+=0.32; b.x+=b.vx; b.y+=b.vy; b.vx*=0.995; b.r+=b.vr;
+      if(b.y<cv.height+40) live++;
+      x.save(); x.translate(b.x,b.y); x.rotate(b.r);
+      x.fillStyle=b.c; x.globalAlpha=Math.max(0,1-frames/(big?150:110));
+      x.fillRect(-b.s/2,-b.s/2,b.s,b.s*0.62); x.restore();
+    }
+    if(live&&frames<(big?170:125)) requestAnimationFrame(step);
+    else cv.remove();
+  })();
+}
+
+/* ============ streaks ============ */
+function markDoneToday(){
+  const t=T_ISO;
+  if(!Array.isArray(D.doneDays)) D.doneDays=[];
+  if(!D.doneDays.includes(t)){ D.doneDays.push(t); D.doneDays=D.doneDays.slice(-400) }
+}
+function streakCount(){
+  const days=(D.doneDays||[]).slice().sort();
+  if(!days.length) return 0;
+  const has=new Set(days);
+  let n=0, cur=T_ISO;
+  if(!has.has(cur)) cur=shiftDay(T_ISO,-1);       // today not done yet is fine
+  if(!has.has(cur)) return 0;
+  while(has.has(cur)){ n++; cur=shiftDay(cur,-1) }
+  return n;
+}
+function bestStreak(){
+  const days=[...new Set(D.doneDays||[])].sort();
+  let best=0,run=0,prev=null;
+  for(const d of days){
+    run = (prev && shiftDay(prev,1)===d) ? run+1 : 1;
+    if(run>best) best=run; prev=d;
+  }
+  return best;
+}
+function dayIsCleared(){
+  const todays=D.tasks.filter(t=>t.date===T_ISO);
+  return todays.length>0 && todays.every(t=>t.status==='done');
+}
+
 /* ============ render ============ */
 function render(save){
   captureDraft();
@@ -483,6 +621,9 @@ function drawHome(){
     ${ankiBubble()}
     <div class="chips">${[['today','Today'],['week','This week'],['month','This month'],['all','Everything']]
       .map(([k,l])=>`<button class="chip ${S.homeFilter===k?'on':''}" onclick="setFilter('${k}')">${l}</button>`).join('')}</div>
+    ${(()=>{const n=streakCount();const b=bestStreak();
+      return n>1?`<div class="streak"><b>🔥 ${n}</b>
+        <span>day streak${b>n?` · best ${b}`:''}</span></div>`:''})()}
     <div class="stats">
       <div class="stat"><b>${c('open')}</b><span>OPEN</span></div>
       <div class="stat"><b>${c('progress')}</b><span>IN PROGRESS</span></div>
@@ -1056,7 +1197,18 @@ function saveTask(id){
   else Object.assign(task(id),o);
   S.date=o.date;S.revTab=o.status;S.addingTask=false;S.editTask=null;S.formRem=null;clearDraft();render();toast(id===null?'Task added':'Saved');
 }
-function setStatus(id,st){task(id).status=st;if(S.screen==='review')S.revTab=st;render();toast('Moved to '+st)}
+function setStatus(id,st){
+  const t=task(id); if(!t) return;
+  const was=t.status;
+  t.status=st;
+  if(S.screen==='review')S.revTab=st;
+  if(st==='done'&&was!=='done'){
+    markDoneToday();
+    if(dayIsCleared()){ sfx('cleared'); confetti(true); render(); return toast('Day cleared! 🎉') }
+    sfx('done');
+  }
+  render(); toast('Moved to '+st);
+}
 function delTask(id){
   const t=task(id); if(!t) return;
   if(t.repeatOf){
@@ -1072,6 +1224,7 @@ function delTask(id){
     D.tasks=D.tasks.filter(x=>x.id!==id);
   }
   D.notes.forEach(n=>{ if(n.taskId===id) n.taskId=null });
+  sfx('delete');
   render(); toast('Deleted');
 }
 function addComment(id){const el=$('#cm'+id),v=el.value.trim();if(!v)return;
@@ -1087,6 +1240,7 @@ function toolbar(target){
     ${b('formatBlock','H1','<h1>')}${b('formatBlock','H2','<h2>')}
     ${b('insertUnorderedList','•')}${b('insertOrderedList','1.')}
     <button class="tb" onmousedown="event.preventDefault()" onclick="insertCheck()" title="checklist">☑</button>
+    <button class="tb" onmousedown="event.preventDefault()" onclick="toggleEmoji('${target}')" title="emoji">😊</button>
     <button class="tb" onmousedown="event.preventDefault()" onclick="hilite()" title="highlight">🖍</button>
     <button class="tb" onmousedown="event.preventDefault()" onclick="insertImg('${target}')" title="image">🖼</button>
     <button class="tb" onmousedown="event.preventDefault()" onclick="insertLink()" title="link">🔗</button>
@@ -1097,6 +1251,30 @@ function toolbar(target){
 function cmd(c,a){document.execCommand(c,false,a||null)}
 function hilite(){const c=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
   document.execCommand('hiliteColor',false,c+'55')}
+const EMOJI_SETS={
+  'Feel':['😀','😊','🙂','😌','🥲','😴','😰','😔','😤','🤒','🤕','🥳','🤯','😮‍💨'],
+  'Health':['💊','🩺','🧪','🩹','🌡️','🏥','💉','🦷','🧠','❤️','🫁','🩸','🧬','😷'],
+  'Do':['✅','❌','⭐','🔥','⚡','📌','🔔','⏰','📅','🎯','🚩','💡','🔁','⏳'],
+  'Life':['🍎','🥗','💧','🏃','🧘','🛌','☕','🌞','🌙','🚗','🏠','💰','📞','🎁']
+};
+function toggleEmoji(target){
+  const box=document.getElementById('emojiBox');
+  if(box){ box.remove(); return }
+  const bar=document.getElementById('tb-'+target) || document.querySelector('.tbar');
+  if(!bar) return;
+  const el=document.createElement('div');
+  el.id='emojiBox'; el.className='emojiBox';
+  el.innerHTML=Object.entries(EMOJI_SETS).map(([grp,list])=>
+    `<div class="emojiGrp">${grp}</div><div class="emojiRow">`+
+    list.map(e=>`<button type="button" class="emj" onmousedown="event.preventDefault()"
+      onclick="putEmoji('${target}','${e}')">${e}</button>`).join('')+`</div>`).join('');
+  bar.parentNode.insertBefore(el,bar.nextSibling);
+}
+function putEmoji(target,ch){
+  const el=document.getElementById(target);
+  if(el){ el.focus(); document.execCommand('insertText',false,ch) }
+  const box=document.getElementById('emojiBox'); if(box) box.remove();
+}
 function insertCheck(){
   document.execCommand('insertHTML',false,
     '<div class="ck"><input type="checkbox" onclick="ckToggle(this)"><span>&nbsp;</span></div><div><br></div>');
@@ -1357,14 +1535,22 @@ function drawScan(){
         <div class="field" style="margin-top:10px">
           <textarea id="sn${s.id}" placeholder="Notes about this image…">${esc(s.notes)}</textarea>
         </div>
+        ${s.text?`<div class="ocr">
+          <div class="ocrHead">TEXT FROM THIS PAGE
+            <button class="btn sm" onclick="ocrToNote(${s.id})">Save to Notes</button></div>
+          <div class="ocrBody">${s.text}</div></div>`:''}
         <div class="acts">
           <button class="btn sm primary" onclick="saveScanNotes(${s.id})">Save notes</button>
-          <button class="btn sm" onclick="toggleScan(${s.id})">${s.scan?'Show original':'Scan as document'}</button>
+          <button class="btn sm" onclick="autoScan(${s.id})">${s.scan?'Re-scan':'✨ Scan document'}</button>
+          ${s.scan?`<button class="btn sm" onclick="D.scans.find(x=>x.id===${s.id}).scan=null;render()">Show original</button>`:''}
+          <button class="btn sm" onclick="rotateScan(${s.id},-90)" title="rotate left">↺</button>
+          <button class="btn sm" onclick="rotateScan(${s.id},90)" title="rotate right">↻</button>
+          <button class="btn sm" onclick="ocrScan(${s.id})">🔎 Read text</button>
           <button class="btn sm" onclick="downloadScan(${s.id})">⬇ Download</button>
           <button class="btn sm" onclick="scansToPDF([${s.id}])">📄 PDF</button>
           <button class="btn sm" onclick="scanToTask(${s.id})">Turn into task</button>
           <button class="btn sm" onclick="scanToNote(${s.id})">Save as note</button>
-          <button class="btn sm danger" onclick="D.scans=D.scans.filter(x=>x.id!==${s.id});render()">Delete</button>
+          <button class="btn sm danger" onclick="sfx('delete');D.scans=D.scans.filter(x=>x.id!==${s.id});render()">Delete</button>
         </div>
       </div>`).join(''):'<div class="empty">Nothing scanned yet. Snap a prescription, lab report or chart — then add notes or turn it into a task.</div>'}`;
 }
@@ -1444,27 +1630,180 @@ function grab(useCamera){
   if(useCamera) return openCamera(addScan);
   pickImage((src,name)=>addScan(src,name),false);
 }
-function saveScanNotes(id){const s=D.scans.find(x=>x.id===id);s.notes=$('#sn'+id).value;render();toast('Notes saved')}
-function toggleScan(id){
-  const s=D.scans.find(x=>x.id===id);
-  if(s.scan){s.scan=null;render();return}
-  const img=new Image();
-  img.onload=()=>{
-    const c=document.createElement('canvas');
-    const w=Math.min(img.width,1400),k=w/img.width;
-    c.width=w;c.height=img.height*k;
-    const x=c.getContext('2d');x.drawImage(img,0,0,c.width,c.height);
-    const d=x.getImageData(0,0,c.width,c.height),p=d.data;
-    for(let i=0;i<p.length;i+=4){
-      let g=p[i]*.3+p[i+1]*.59+p[i+2]*.11;
-      g=g<118?0:g>150?255:(g-118)*8;
-      g=Math.max(0,Math.min(255,g));
-      p[i]=p[i+1]=p[i+2]=g;
-    }
-    x.putImageData(d,0,0);
-    s.scan=c.toDataURL('image/jpeg',.8);render();toast('Scanned');
+function saveScanNotes(id){const s=D.scans.find(x=>x.id===id);if(!s)return;s.notes=($('#sn'+id)||{}).value||'';render();toast('Notes saved')}
+/* ============ document scanner ============ */
+function loadImg(src){
+  return new Promise((res,rej)=>{
+    const i=new Image();
+    i.onload=()=>res(i); i.onerror=()=>rej(new Error('Could not read that image'));
+    i.src=src;
+  });
+}
+function toCanvas(img,maxW){
+  const w=Math.min(img.width||1000,maxW||1600), k=w/(img.width||1);
+  const c=document.createElement('canvas');
+  c.width=Math.max(1,Math.round(w)); c.height=Math.max(1,Math.round((img.height||1)*k));
+  c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+  return c;
+}
+/* grey values, downsampled, for analysis */
+function greyGrid(c,step){
+  const x=c.getContext('2d'), d=x.getImageData(0,0,c.width,c.height).data;
+  const st=step||2, W=Math.floor(c.width/st), H=Math.floor(c.height/st);
+  const g=new Float32Array(W*H);
+  for(let y=0;y<H;y++) for(let X=0;X<W;X++){
+    const i=((y*st)*c.width+(X*st))*4;
+    g[y*W+X]=d[i]*.3+d[i+1]*.59+d[i+2]*.11;
+  }
+  return {g,W,H,st};
+}
+/* find the page: rows/cols that differ from the border colour */
+function contentBox(c){
+  const {g,W,H,st}=greyGrid(c,2);
+  const at=(x,y)=>g[y*W+x];
+  const edge=[];
+  for(let x=0;x<W;x++){ edge.push(at(x,0),at(x,H-1)) }
+  for(let y=0;y<H;y++){ edge.push(at(0,y),at(W-1,y)) }
+  edge.sort((a,b)=>a-b);
+  const bg=edge[(edge.length/2)|0];
+  const tol=26;
+  const colHit=new Float32Array(W), rowHit=new Float32Array(H);
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    if(Math.abs(at(x,y)-bg)>tol){ colHit[x]++; rowHit[y]++ }
+  }
+  const scan=(arr,len,cross)=>{
+    const need=cross*0.06;
+    let a=0,b=len-1;
+    while(a<len&&arr[a]<need)a++;
+    while(b>a&&arr[b]<need)b--;
+    return [a,b];
   };
-  img.src=s.src;
+  const [x0,x1]=scan(colHit,W,H), [y0,y1]=scan(rowHit,H,W);
+  if(x1-x0<W*0.25||y1-y0<H*0.25) return null;
+  const pad=6;
+  return {
+    x:Math.max(0,(x0*st)-pad), y:Math.max(0,(y0*st)-pad),
+    w:Math.min(c.width,((x1-x0)*st)+pad*2), h:Math.min(c.height,((y1-y0)*st)+pad*2)
+  };
+}
+/* find a small tilt by testing which angle makes text rows sharpest */
+function findSkew(c){
+  const {g,W,H}=greyGrid(c,3);
+  const dark=new Uint8Array(W*H);
+  let sum=0; for(let i=0;i<g.length;i++) sum+=g[i];
+  const mean=sum/g.length;
+  for(let i=0;i<g.length;i++) dark[i]=g[i]<mean-18?1:0;
+  const score=ang=>{
+    const t=Math.tan(ang*Math.PI/180), rows=new Float32Array(H);
+    for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+      if(!dark[y*W+x]) continue;
+      const ry=Math.round(y+(x-W/2)*t);
+      if(ry>=0&&ry<H) rows[ry]++;
+    }
+    let m=0; for(let i=0;i<H;i++) m+=rows[i]; m/=H;
+    let v=0; for(let i=0;i<H;i++) v+=(rows[i]-m)*(rows[i]-m);
+    return v;
+  };
+  let best=0,bestV=-1;
+  for(let a=-7;a<=7;a+=0.5){ const v=score(a); if(v>bestV){bestV=v;best=a} }
+  return Math.abs(best)<0.6?0:best;
+}
+function rotateCanvas(c,deg){
+  if(!deg) return c;
+  const r=deg*Math.PI/180;
+  const sin=Math.abs(Math.sin(r)), cos=Math.abs(Math.cos(r));
+  const w=Math.round(c.width*cos+c.height*sin), h=Math.round(c.width*sin+c.height*cos);
+  const o=document.createElement('canvas'); o.width=w; o.height=h;
+  const x=o.getContext('2d');
+  x.fillStyle='#fff'; x.fillRect(0,0,w,h);
+  x.translate(w/2,h/2); x.rotate(r); x.drawImage(c,-c.width/2,-c.height/2);
+  return o;
+}
+function cropCanvas(c,box){
+  const o=document.createElement('canvas');
+  o.width=Math.max(1,Math.round(box.w)); o.height=Math.max(1,Math.round(box.h));
+  o.getContext('2d').drawImage(c,box.x,box.y,box.w,box.h,0,0,o.width,o.height);
+  return o;
+}
+/* local threshold — keeps faint pen strokes that a global cutoff loses */
+function cleanUp(c){
+  const x=c.getContext('2d'), img=x.getImageData(0,0,c.width,c.height), p=img.data;
+  const W=c.width,H=c.height;
+  const grey=new Float32Array(W*H);
+  for(let i=0,j=0;i<p.length;i+=4,j++) grey[j]=p[i]*.3+p[i+1]*.59+p[i+2]*.11;
+  const R=Math.max(8,Math.round(Math.min(W,H)/28));
+  const col=new Float32Array(W*H);
+  for(let y=0;y<H;y++){
+    let acc=0,n=0;
+    for(let x=0;x<W;x++){
+      acc+=grey[y*W+x]; n++;
+      if(x>R){ acc-=grey[y*W+x-R-1]; n-- }
+      col[y*W+x]=acc/n;
+    }
+  }
+  const box=new Float32Array(W*H);
+  for(let x=0;x<W;x++){
+    let acc=0,n=0;
+    for(let y=0;y<H;y++){
+      acc+=col[y*W+x]; n++;
+      if(y>R){ acc-=col[(y-R-1)*W+x]; n-- }
+      box[y*W+x]=acc/n;
+    }
+  }
+  for(let j=0;j<W*H;j++){
+    const v=grey[j]<box[j]-9 ? 0 : 255;
+    const i=j*4; p[i]=p[i+1]=p[i+2]=v; p[i+3]=255;
+  }
+  x.putImageData(img,0,0);
+  return c;
+}
+async function autoScan(id){
+  const s=D.scans.find(x=>x.id===id); if(!s) return;
+  S.busy='Scanning…'; render();
+  try{
+    let c=toCanvas(await loadImg(s.src),1700);
+    const box=contentBox(c); if(box) c=cropCanvas(c,box);
+    const sk=findSkew(c); if(sk) c=rotateCanvas(c,sk);   // findSkew returns the correction, not the tilt
+    const b2=contentBox(c); if(b2) c=cropCanvas(c,b2);
+    cleanUp(c);
+    s.scan=c.toDataURL('image/jpeg',.85);
+    s.rot=0;
+    toast(sk?('Scanned · straightened '+Math.abs(sk).toFixed(1)+'°'):'Scanned');
+  }catch(e){ toast('Could not scan that image') }
+  S.busy=''; render();
+}
+async function rotateScan(id,deg){
+  const s=D.scans.find(x=>x.id===id); if(!s) return;
+  S.busy='Rotating…'; render();
+  try{
+    const c=rotateCanvas(toCanvas(await loadImg(s.scan||s.src),1700),deg);
+    if(s.scan) s.scan=c.toDataURL('image/jpeg',.85);
+    else s.src=c.toDataURL('image/jpeg',.9);
+  }catch(e){ toast('Could not rotate') }
+  S.busy=''; render();
+}
+async function ocrScan(id){
+  const s=D.scans.find(x=>x.id===id); if(!s) return;
+  if(!requireKey()) return;
+  S.busy='Reading the text…'; render();
+  try{
+    const src=s.scan||s.src;
+    const m=/^data:([^;]+);base64,(.*)$/.exec(src);
+    if(!m) throw new Error('Unsupported image');
+    const out=await aiParts([
+      {inline_data:{mime_type:m[1],data:m[2]}},
+      {text:'Transcribe every word in this document exactly. Keep the layout: use headings and an HTML table where the document has a table. Return simple HTML only, no commentary.'}
+    ]);
+    s.text=out||'';
+    toast(out?'Text captured':'No text found');
+  }catch(e){ toast('OCR: '+e.message) }
+  S.busy=''; render();
+}
+function ocrToNote(id){
+  const s=D.scans.find(x=>x.id===id); if(!s||!s.text) return;
+  D.notes.unshift({id:nid(),title:s.name||'Scanned document',html:s.text,
+    tags:['scan'],taskId:null,pinned:false,at:Date.now(),updated:Date.now()});
+  render(); toast('Saved to Notes');
 }
 function scanToTask(id){const s=D.scans.find(x=>x.id===id); if(!s) return;
   const t=newTask({title:'Review '+s.name,
@@ -1759,6 +2098,18 @@ function drawSettings(){
     <button class="btn wide" onclick="D.aiKey=document.getElementById('aiKey').value.trim();render();toast('Key saved')">Save key</button>
     <button class="btn wide" style="margin-top:7px" onclick="testKey()">Test AI key</button>
     ${location.protocol==='file:'?`<div class="hint" style="text-align:left;color:#e0a05a">You opened this file directly from your disk. AI, camera and offline mode need the app to be loaded from its web address.</div>`:''}
+    <div class="sect">CELEBRATIONS</div>
+    <div class="field"><label>SOUND</label>
+      <select onchange="D.soundPack=this.value;render();sfx('done')">
+        ${Object.entries(SOUND_PACKS).map(([k,l])=>
+          `<option value="${k}" ${D.soundPack===k?'selected':''}>${l}</option>`).join('')}
+      </select>
+      <div class="hint" style="text-align:left">Plays when you finish a task, clear the day, or delete something.</div>
+    </div>
+    <div class="toggle">Confetti when the day is cleared
+      <span class="sw ${D.confetti!==false?'on':''}"
+        onclick="D.confetti=!(D.confetti!==false);render();if(D.confetti){confetti(true);sfx('cleared')}"><i></i></span></div>
+
     <div class="sect">REMINDERS</div>
     <div class="toggle">Reminders &amp; push notifications
       <span class="sw ${D.reminders?'on':''}" onclick="askNotify()"><i></i></span></div>

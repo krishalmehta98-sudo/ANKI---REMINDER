@@ -8,8 +8,8 @@
     "ios": "expo start --ios"
   },
   "dependencies": {
+    "@notifee/react-native": "^9.1.8",
     "expo": "~51.0.0",
-    "expo-notifications": "~0.28.19",
     "expo-status-bar": "~1.12.1",
     "react": "18.2.0",
     "react-native": "0.74.5",
